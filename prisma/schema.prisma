@@ -1,0 +1,614 @@
+// ============================================================
+// JESMA U - Gestion Commerciale
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// UTILISATEURS & RÔLES
+// ------------------------------------------------------------
+
+enum RoleUtilisateur {
+  ADMIN
+  CAISSIER
+}
+
+enum ModulePermission {
+  VENTES
+  STOCK
+  ARTICLES
+  DEPENSES
+  RAPPORTS
+  UTILISATEURS
+}
+
+model Role {
+  id          Int              @id @default(autoincrement())
+  nom         String           @unique
+  estAdmin    Boolean          @default(false)
+  modifiable  Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+
+  permissions   RolePermission[]
+  utilisateurs  Utilisateur[]
+}
+
+model RolePermission {
+  id      Int               @id @default(autoincrement())
+  roleId  Int
+  role    Role              @relation(fields: [roleId], references: [id])
+  module  ModulePermission
+  actif   Boolean           @default(false)
+
+  @@unique([roleId, module])
+}
+
+model Utilisateur {
+  id            Int             @id @default(autoincrement())
+  nomUtilisateur String         @unique
+  pin           String
+  nomComplet    String
+  role          RoleUtilisateur
+  roleId        Int?
+  roleDynamique Role?           @relation(fields: [roleId], references: [id])
+  lieuId        Int?
+  lieu          Lieu?           @relation(fields: [lieuId], references: [id])
+  actif         Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+
+  ventes            Vente[]
+  journalActivite JournalActivite[]
+  depenses          Depense[]
+  mouvementsStock   MouvementStock[]
+  demandesRemise    DemandeRemise[] @relation("DemandeurRemise")
+  remisesApprouvees DemandeRemise[] @relation("ApprobateurRemise")
+  activationsCarte  CarteCadeauCycle[] @relation("ActivateurCycle")
+  offresValidees    ListeCadeauCarteUtilisee[] @relation("ValidateurOffre")
+  reglementsCredit  ReglementCredit[]
+  avoirsCrees       Avoir[]
+  demandesAnnulation Vente[]    @relation("DemandeurAnnulationVente")
+}
+model JournalActivite {
+  id            Int         @id @default(autoincrement())
+  type          String      // 'ANNULATION_VENTE' | 'REMISE_APPROUVEE' | 'REMISE_REFUSEE' | 'MODIFICATION_PRIX_ARTICLE'
+  description   String
+  utilisateurId Int
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id])
+  createdAt     DateTime    @default(now())
+}
+
+// ------------------------------------------------------------
+// FAMILLES & SOUS-FAMILLES
+// ------------------------------------------------------------
+
+model Famille {
+  id            Int           @id @default(autoincrement())
+  nom           String        @unique
+  actif         Boolean       @default(true)
+
+  sousFamilles  SousFamille[]
+  articles      Article[]
+}
+
+// codePrefixe : choisi par Victoria à la création (ex: "ANDT"), sert de base à la
+// génération automatique de la référence de chaque article de cette sous-famille.
+// dernierNumero : compteur interne, incrémenté à chaque nouvel article (ANDT01, ANDT02...).
+model SousFamille {
+  id             Int      @id @default(autoincrement())
+  nom            String
+  codePrefixe    String   @unique
+  dernierNumero  Int      @default(0)
+  familleId      Int
+  famille        Famille  @relation(fields: [familleId], references: [id])
+  actif          Boolean  @default(true)
+
+  articles    Article[]
+
+  @@unique([familleId, nom])
+}
+
+// ------------------------------------------------------------
+// ARTICLES & STOCK
+// ------------------------------------------------------------
+
+model Article {
+  id              Int          @id @default(autoincrement())
+  reference       String       @unique
+  codeBarre       String?      @unique
+  codeBarreGenere Boolean      @default(false)
+  codeInterne     String?      @unique
+  designation     String
+  photoUrl        String?
+  familleId       Int?
+  famille         Famille?     @relation(fields: [familleId], references: [id])
+  sousFamilleId   Int?
+  sousFamille     SousFamille? @relation(fields: [sousFamilleId], references: [id])
+  prixAchat       Decimal      @default(0)
+  prixVente       Decimal
+  stockActuel     Int          @default(0)
+  seuilAlerte     Int          @default(5)
+  actif           Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  ligneVentes        LigneVente[]
+  mouvementsStock    MouvementStock[]
+  receptions         LigneReception[]
+  ligneListeCadeau   LigneListeCadeau[]
+  stocksEmplacement  StockEmplacement[]
+  lignesTransfert    LigneTransfertStock[]
+  lignesAvoirRetour  LigneAvoirRetour[]
+}
+
+// ------------------------------------------------------------
+// EMPLACEMENTS & STOCK MULTI-SITE
+// ------------------------------------------------------------
+
+enum TypeLieu {
+  ENTREPOT
+  BOUTIQUE
+}
+
+model Lieu {
+  id     Int      @id @default(autoincrement())
+  nom    String   @unique
+  type   TypeLieu
+  actif  Boolean  @default(true)
+
+  stocks                StockEmplacement[]
+  receptions            Reception[]
+  mouvementsStock       MouvementStock[]
+  transfertsSource      TransfertStock[] @relation("LieuSource")
+  transfertsDestination TransfertStock[] @relation("LieuDestination")
+  ventes                Vente[]
+  utilisateurs          Utilisateur[]
+  carteCadeauCycles CarteCadeauCycle[]
+  vendeurs              Vendeur[]
+}
+
+model StockEmplacement {
+  id        Int     @id @default(autoincrement())
+  articleId Int
+  article   Article @relation(fields: [articleId], references: [id])
+  lieuId    Int
+  lieu      Lieu    @relation(fields: [lieuId], references: [id])
+  quantite  Int     @default(0)
+
+  @@unique([articleId, lieuId])
+}
+
+model Reception {
+  id            Int       @id @default(autoincrement())
+  fournisseur   String?
+  reference     String?
+  lieuId        Int
+  lieu          Lieu      @relation(fields: [lieuId], references: [id])
+  dateReception DateTime  @default(now())
+  notes         String?
+  createdAt     DateTime  @default(now())
+
+  lignes        LigneReception[]
+}
+
+model LigneReception {
+  id            Int       @id @default(autoincrement())
+  receptionId   Int
+  reception     Reception @relation(fields: [receptionId], references: [id])
+  articleId     Int
+  article       Article   @relation(fields: [articleId], references: [id])
+  quantite      Int
+  prixAchat     Decimal
+}
+
+enum StatutTransfert {
+  VALIDE
+  ANNULE
+}
+
+model TransfertStock {
+  id                Int             @id @default(autoincrement())
+  reference         String          @unique
+  lieuSourceId      Int
+  lieuSource        Lieu            @relation("LieuSource", fields: [lieuSourceId], references: [id])
+  lieuDestinationId Int
+  lieuDestination   Lieu            @relation("LieuDestination", fields: [lieuDestinationId], references: [id])
+  statut            StatutTransfert @default(VALIDE)
+  dateTransfert     DateTime        @default(now())
+  notes             String?
+  createdAt         DateTime        @default(now())
+
+  lignes            LigneTransfertStock[]
+}
+
+model LigneTransfertStock {
+  id          Int            @id @default(autoincrement())
+  transfertId Int
+  transfert   TransfertStock @relation(fields: [transfertId], references: [id])
+  articleId   Int
+  article     Article        @relation(fields: [articleId], references: [id])
+  quantite    Int
+}
+
+enum TypeMouvementStock {
+  ENTREE_RECEPTION
+  SORTIE_VENTE
+  ANNULATION_VENTE
+  CORRECTION_INVENTAIRE
+  RETOUR_CLIENT
+  TRANSFERT_SORTIE
+  TRANSFERT_ENTREE
+  SORTIE_FIDELITE
+}
+
+model MouvementStock {
+  id            Int                @id @default(autoincrement())
+  articleId     Int
+  article       Article            @relation(fields: [articleId], references: [id])
+  lieuId        Int
+  lieu          Lieu               @relation(fields: [lieuId], references: [id])
+  type          TypeMouvementStock
+  quantite      Int
+  stockAvant    Int
+  stockApres    Int
+  utilisateurId Int
+  utilisateur   Utilisateur        @relation(fields: [utilisateurId], references: [id])
+  refVenteId    Int?
+  refVente      Vente?             @relation(fields: [refVenteId], references: [id])
+  notes         String?
+  createdAt     DateTime           @default(now())
+}
+
+// ------------------------------------------------------------
+// CLIENTS
+// ------------------------------------------------------------
+
+model Client {
+  id            Int      @id @default(autoincrement())
+  nomComplet    String
+  telephone     String?  @unique
+  email         String?
+  pointsFidelite Int     @default(0)
+  estComptoir   Boolean  @default(false)
+
+  achatsConsecutifs       Int     @default(0)
+  montantCumuleConsecutif Decimal @default(0)
+
+  createdAt     DateTime @default(now())
+
+  ventes        Vente[]
+  listesCadeau  ListeCadeau[]
+  recompensesFidelite RecompenseFidelite[]
+}
+
+enum TypeRecompenseFidelite {
+  A_DEFINIR
+  REMISE
+  ARTICLE
+  AUTRE
+}
+
+enum StatutRecompenseFidelite {
+  EN_ATTENTE
+  DEFINIE
+  UTILISEE
+}
+
+model RecompenseFidelite {
+  id             Int                      @id @default(autoincrement())
+  clientId       Int
+  client         Client                   @relation(fields: [clientId], references: [id])
+  montantCumule  Decimal
+  type           TypeRecompenseFidelite   @default(A_DEFINIR)
+  articleOffertId Int?
+  valeurRemise   Decimal?
+  description    String?
+  statut         StatutRecompenseFidelite @default(EN_ATTENTE)
+  dateAtteinte   DateTime                 @default(now())
+  dateUtilisation DateTime?
+}
+
+// ------------------------------------------------------------
+// VENDEURS
+// ------------------------------------------------------------
+
+model Vendeur {
+  id        Int      @id @default(autoincrement())
+  nomComplet String
+  telephone String?
+  lieuId    Int?
+  lieu      Lieu?    @relation(fields: [lieuId], references: [id])
+  actif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  ventes    Vente[]
+}
+
+// ------------------------------------------------------------
+// VENTES (crédit, avoirs, cartes cadeaux, demande d'annulation)
+// ------------------------------------------------------------
+
+enum StatutVente {
+  VALIDEE
+  ANNULEE
+}
+
+enum TypeVente {
+  COMPTANT
+  CREDIT
+}
+
+model Vente {
+  id             Int          @id @default(autoincrement())
+  numero         String       @unique
+  clientId       Int?
+  client         Client?      @relation(fields: [clientId], references: [id])
+  utilisateurId  Int
+  utilisateur    Utilisateur  @relation(fields: [utilisateurId], references: [id])
+  vendeurId      Int?
+  vendeur        Vendeur?     @relation(fields: [vendeurId], references: [id])
+  lieuId         Int
+  lieu           Lieu         @relation(fields: [lieuId], references: [id])
+  statut         StatutVente  @default(VALIDEE)
+  typeVente      TypeVente    @default(COMPTANT)
+  totalHT        Decimal
+  remiseMontant  Decimal      @default(0)
+  totalNet       Decimal
+  modePaiement   String?
+  carteCadeauUtiliseeId Int?
+  carteCadeauUtilisee   CarteCadeau? @relation(fields: [carteCadeauUtiliseeId], references: [id])
+  avoirUtiliseId Int?
+  avoirUtilise   Avoir?       @relation("AvoirUtiliseSurVente", fields: [avoirUtiliseId], references: [id])
+  dateAnnulation DateTime?
+  motifAnnulation String?
+  demandeAnnulationEnCours Boolean   @default(false)
+  motifDemandeAnnulation   String?
+  demandeurAnnulationId    Int?
+  demandeurAnnulation      Utilisateur? @relation("DemandeurAnnulationVente", fields: [demandeurAnnulationId], references: [id])
+  dateDemandeAnnulation    DateTime?
+  createdAt      DateTime     @default(now())
+
+  lignes         LigneVente[]
+  mouvementsStock MouvementStock[]
+  demandesRemise DemandeRemise[]
+  paiements      PaiementVente[]
+  reglements     ReglementCredit[]
+  avoirsOrigine  Avoir[]      @relation("VenteOrigineAvoir")
+}
+
+model LigneVente {
+  id          Int     @id @default(autoincrement())
+  venteId     Int
+  vente       Vente   @relation(fields: [venteId], references: [id])
+  articleId   Int
+  article     Article @relation(fields: [articleId], references: [id])
+  quantite    Int
+  prixUnitaire Decimal
+  remiseLigne Decimal @default(0)
+}
+
+enum StatutDemandeRemise {
+  EN_ATTENTE
+  APPROUVEE
+  REFUSEE
+}
+
+model DemandeRemise {
+  id             Int                 @id @default(autoincrement())
+  venteId        Int
+  vente          Vente               @relation(fields: [venteId], references: [id])
+  demandeurId    Int
+  demandeur      Utilisateur         @relation("DemandeurRemise", fields: [demandeurId], references: [id])
+  montantDemande Decimal
+  motif          String?
+  statut         StatutDemandeRemise @default(EN_ATTENTE)
+  approbateurId  Int?
+  approbateur    Utilisateur?        @relation("ApprobateurRemise", fields: [approbateurId], references: [id])
+  createdAt      DateTime            @default(now())
+  resolvedAt     DateTime?
+}
+
+// ------------------------------------------------------------
+// RÈGLEMENTS DE CRÉDIT
+// ------------------------------------------------------------
+
+model ReglementCredit {
+  id            Int         @id @default(autoincrement())
+  venteId       Int
+  vente         Vente       @relation(fields: [venteId], references: [id])
+  montant       Decimal
+  mode          String
+  utilisateurId Int
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id])
+  createdAt     DateTime    @default(now())
+}
+
+// ------------------------------------------------------------
+// RETOURS -> AVOIRS
+// ------------------------------------------------------------
+
+enum StatutAvoir {
+  ACTIF
+  UTILISE
+}
+
+model Avoir {
+  id              Int         @id @default(autoincrement())
+  reference       String      @unique
+  venteOrigineId  Int
+  venteOrigine    Vente       @relation("VenteOrigineAvoir", fields: [venteOrigineId], references: [id])
+  montant         Decimal
+  statut          StatutAvoir @default(ACTIF)
+  utilisateurId   Int
+  utilisateur     Utilisateur @relation(fields: [utilisateurId], references: [id])
+  createdAt       DateTime    @default(now())
+  dateUtilisation DateTime?
+
+  lignes          LigneAvoirRetour[]
+  venteUtilisation Vente[]    @relation("AvoirUtiliseSurVente")
+}
+
+model LigneAvoirRetour {
+  id           Int     @id @default(autoincrement())
+  avoirId      Int
+  avoir        Avoir   @relation(fields: [avoirId], references: [id])
+  articleId    Int
+  article      Article @relation(fields: [articleId], references: [id])
+  quantite     Int
+  prixUnitaire Decimal
+}
+
+// ------------------------------------------------------------
+// CARTES CADEAUX RÉUTILISABLES
+// ------------------------------------------------------------
+
+model DenominationCarteCadeau {
+  id       Int    @id @default(autoincrement())
+  montant  Decimal @unique
+  actif    Boolean @default(true)
+}
+
+enum StatutCarteCadeau {
+  INACTIVE
+  ACTIVE
+  UTILISEE
+}
+
+model CarteCadeau {
+  id            Int               @id @default(autoincrement())
+  codeBarre     String            @unique
+  denomination  Decimal
+  statut        StatutCarteCadeau @default(INACTIVE)
+  createdAt     DateTime          @default(now())
+
+  cycles        CarteCadeauCycle[]
+  ventes        Vente[]
+  listesCadeauOfferts ListeCadeauCarteUtilisee[]
+}
+
+model CarteCadeauCycle {
+  id             Int          @id @default(autoincrement())
+  carteCadeauId  Int
+  carteCadeau    CarteCadeau  @relation(fields: [carteCadeauId], references: [id])
+  denomination   Decimal
+  dateActivation DateTime     @default(now())
+  dateUtilisation DateTime?
+  utilisateurId  Int
+  utilisateur    Utilisateur  @relation("ActivateurCycle", fields: [utilisateurId], references: [id])
+  lieuId         Int?
+  lieu           Lieu?        @relation(fields: [lieuId], references: [id])
+  modePaiement   String?
+}
+
+// ------------------------------------------------------------
+// LISTES CADEAUX
+// ------------------------------------------------------------
+
+model ListeCadeau {
+  id            Int      @id @default(autoincrement())
+  clientId      Int
+  client        Client   @relation(fields: [clientId], references: [id])
+  titre         String?
+  codeAcces     String   @unique
+  actif         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  nomDestinataire        String?
+  telephoneDestinataire1 String?
+  telephoneDestinataire2 String?
+  emailDestinataire      String?
+
+  nomDonateur       String?
+  telephoneDonateur String?
+  emailDonateur     String?
+
+  lignes        LigneListeCadeau[]
+  cartesUtilisees ListeCadeauCarteUtilisee[]
+}
+
+model LigneListeCadeau {
+  id            Int         @id @default(autoincrement())
+  listeCadeauId Int
+  listeCadeau   ListeCadeau @relation(fields: [listeCadeauId], references: [id])
+  articleId     Int
+  article       Article     @relation(fields: [articleId], references: [id])
+  quantiteSouhaitee Int
+  quantiteOfferte   Int     @default(0)
+
+  detailsOffres DetailOffreListeCadeau[]
+}
+
+enum StatutConfirmationOffre {
+  CONFIRME
+  EN_ATTENTE_VERIFICATION
+  REJETE
+}
+
+model ListeCadeauCarteUtilisee {
+  id             Int                      @id @default(autoincrement())
+  listeCadeauId  Int
+  listeCadeau    ListeCadeau              @relation(fields: [listeCadeauId], references: [id])
+  carteCadeauId  Int?
+  carteCadeau    CarteCadeau?             @relation(fields: [carteCadeauId], references: [id])
+  modePaiement   String?
+  offrePar       String?
+  canal          String
+  montantUtilise Decimal
+  statutConfirmation StatutConfirmationOffre @default(CONFIRME)
+  validateurId   Int?
+  validateur     Utilisateur?             @relation("ValidateurOffre", fields: [validateurId], references: [id])
+  dateValidation DateTime?
+  createdAt      DateTime                 @default(now())
+
+  lignesCouvertes DetailOffreListeCadeau[]
+}
+
+model DetailOffreListeCadeau {
+  id                  Int                      @id @default(autoincrement())
+  offreId             Int
+  offre               ListeCadeauCarteUtilisee @relation(fields: [offreId], references: [id])
+  ligneListeCadeauId  Int
+  ligneListeCadeau    LigneListeCadeau         @relation(fields: [ligneListeCadeauId], references: [id])
+  quantite            Int
+}
+
+// ------------------------------------------------------------
+// DÉPENSES / BUDGET
+// ------------------------------------------------------------
+
+model CategorieDepense {
+  id       Int    @id @default(autoincrement())
+  nom      String @unique
+  depenses Depense[]
+}
+
+model Depense {
+  id             Int              @id @default(autoincrement())
+  categorieId    Int
+  categorie      CategorieDepense @relation(fields: [categorieId], references: [id])
+  montant        Decimal
+  description    String?
+  utilisateurId  Int
+  utilisateur    Utilisateur      @relation(fields: [utilisateurId], references: [id])
+  dateDepense    DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+}
+
+// ------------------------------------------------------------
+// PAIEMENTS DE VENTE
+// ------------------------------------------------------------
+
+model PaiementVente {
+  id        Int      @id @default(autoincrement())
+  venteId   Int
+  vente     Vente    @relation(fields: [venteId], references: [id])
+  mode      String
+  montant   Decimal
+  createdAt DateTime @default(now())
+}
