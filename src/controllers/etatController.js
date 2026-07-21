@@ -31,6 +31,8 @@ function construirePeriodeChamp(champ, dateDebut, dateFin) {
   return where;
 }
 
+// Un caissier (non-ADMIN) ne peut consulter que la journée en cours dans États, quels
+// que soient les paramètres envoyés — imposé ici côté serveur, pas juste caché à l'écran.
 function restreindreAJourdhui(req, dateDebut, dateFin) {
   if (req.user.role === 'ADMIN') return { dateDebut, dateFin };
   const aujourdhui = new Date().toISOString().slice(0, 10);
@@ -182,7 +184,7 @@ async function parModePaiement(req, res) {
     parMode[p.mode] = (parMode[p.mode] || 0) + Number(p.montant);
   }
   for (const c of cyclesCartesCadeaux) {
-    if (!c.modePaiement) continue;
+    if (!c.modePaiement) continue; // anciens cycles créés avant ce suivi, sans mode connu
     parMode[c.modePaiement] = (parMode[c.modePaiement] || 0) + Number(c.denomination);
   }
 
@@ -214,6 +216,8 @@ async function parType(req, res) {
 }
 
 // GET /api/etats/fermeture-caisse?date=&lieuId=
+// Photo de la journée : encaissements (ventes du jour + règlements crédit reçus le jour même),
+// dépenses du jour, résultat net, et mouvement des avoirs (émis / utilisés) — sans retour d'espèces.
 async function fermetureCaisse(req, res) {
   const { date, lieuId } = req.query;
   const dateEffective = req.user.role === 'ADMIN' ? date : null;
@@ -366,27 +370,36 @@ async function exporterDepensesCsv(req, res) {
 }
 
 // GET /api/etats/peremptions?jours=30
-// Liste les articles dont la date de péremption approche (ou est déjà dépassée),
-// triés du plus urgent au moins urgent. Seuil par défaut : 30 jours.
+// Liste les LOTS reçus (pas les articles) dont la date de péremption approche ou est
+// dépassée — un même article peut apparaître plusieurs fois s'il a été reçu plusieurs
+// fois avec des dates différentes. Triés du plus urgent au moins urgent.
 async function produitsPeremptionProche(req, res) {
   const jours = req.query.jours ? Number(req.query.jours) : 30;
   const limite = new Date();
   limite.setDate(limite.getDate() + jours);
   limite.setHours(23, 59, 59, 999);
 
-  const articles = await prisma.article.findMany({
-    where: {
-      actif: true,
-      datePeremption: { not: null, lte: limite },
+  const lignes = await prisma.ligneReception.findMany({
+    where: { datePeremption: { not: null, lte: limite } },
+    include: {
+      article: { include: { famille: true, sousFamille: true } },
+      reception: { include: { lieu: true } },
     },
-    include: { famille: true, sousFamille: true },
     orderBy: { datePeremption: 'asc' },
   });
 
   const aujourdhui = new Date();
-  const resultats = articles.map((a) => ({
-    ...a,
-    joursRestants: Math.ceil((new Date(a.datePeremption) - aujourdhui) / (1000 * 60 * 60 * 24)),
+  const resultats = lignes.map((l) => ({
+    id: l.id,
+    articleId: l.articleId,
+    designation: l.article.designation,
+    reference: l.article.reference,
+    famille: l.article.famille?.nom,
+    sousFamille: l.article.sousFamille?.nom,
+    lieu: l.reception.lieu?.nom,
+    quantiteRecue: l.quantite,
+    datePeremption: l.datePeremption,
+    joursRestants: Math.ceil((new Date(l.datePeremption) - aujourdhui) / (1000 * 60 * 60 * 24)),
   }));
 
   res.json({ seuilJours: jours, resultats });
@@ -398,3 +411,4 @@ module.exports = {
   exporterMargeCsv, exporterVentesCsv, exporterDepensesCsv,
   produitsPeremptionProche,
 };
+

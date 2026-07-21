@@ -2,7 +2,9 @@ const prisma = require('../lib/prisma');
 const { appliquerMouvementStock } = require('../lib/stock');
 
 // POST /api/receptions
-// body: { fournisseur?, reference?, lieuId, notes?, lignes: [{ articleId, quantite, prixAchat }] }
+// body: { fournisseur?, reference?, lieuId, notes?, lignes: [{ articleId, quantite, prixAchat, datePeremption? }] }
+// La date de péremption est optionnelle et propre à CHAQUE lot reçu — un même article
+// peut avoir des dates différentes d'une réception à l'autre.
 async function creerReception(req, res) {
   const { fournisseur, reference, lieuId, notes, lignes } = req.body;
   const utilisateurId = req.user.id;
@@ -24,6 +26,7 @@ async function creerReception(req, res) {
               articleId: Number(l.articleId),
               quantite: Number(l.quantite),
               prixAchat: l.prixAchat,
+              datePeremption: l.datePeremption ? new Date(l.datePeremption) : null,
             })),
           },
         },

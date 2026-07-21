@@ -135,7 +135,6 @@ model Article {
   stockActuel     Int          @default(0)
   seuilAlerte     Int          @default(5)
   quantiteAImprimer Int       @default(0)
-  datePeremption    DateTime?
   actif           Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -185,7 +184,6 @@ model StockEmplacement {
 
   @@unique([articleId, lieuId])
 }
-
 model Reception {
   id            Int       @id @default(autoincrement())
   fournisseur   String?
@@ -198,7 +196,6 @@ model Reception {
 
   lignes        LigneReception[]
 }
-
 model LigneReception {
   id            Int       @id @default(autoincrement())
   receptionId   Int
@@ -207,6 +204,7 @@ model LigneReception {
   article       Article   @relation(fields: [articleId], references: [id])
   quantite      Int
   prixAchat     Decimal
+  datePeremption DateTime?
 }
 
 enum StatutTransfert {

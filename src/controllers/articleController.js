@@ -59,7 +59,7 @@ async function rechercherArticle(req, res) {
 async function creerArticle(req, res) {
   const {
     codeBarre, codeInterne, designation,
-    familleId, sousFamilleId, prixAchat, prixVente, seuilAlerte, datePeremption,
+    familleId, sousFamilleId, prixAchat, prixVente, seuilAlerte,
   } = req.body;
 
   if (!designation || !familleId || !sousFamilleId || prixVente === undefined) {
@@ -90,7 +90,6 @@ async function creerArticle(req, res) {
           prixAchat: prixAchat || 0,
           prixVente,
           seuilAlerte: seuilAlerte ?? 5,
-          datePeremption: datePeremption ? new Date(datePeremption) : null,
         },
       });
     });
@@ -106,7 +105,7 @@ async function modifierArticle(req, res) {
   const id = Number(req.params.id);
   const {
     designation, familleId, sousFamilleId,
-    prixAchat, prixVente, seuilAlerte, actif, datePeremption,
+    prixAchat, prixVente, seuilAlerte, actif,
   } = req.body;
 
   const article = await prisma.article.findUnique({ where: { id } });
@@ -128,9 +127,6 @@ async function modifierArticle(req, res) {
       prixVente,
       seuilAlerte: seuilAlerte ?? article.seuilAlerte,
       actif: actif !== undefined ? actif : article.actif,
-      datePeremption: datePeremption !== undefined
-        ? (datePeremption ? new Date(datePeremption) : null)
-        : article.datePeremption,
     },
   });
 
@@ -180,8 +176,6 @@ async function genererCodeBarre(req, res) {
 }
 
 // GET /api/articles/a-imprimer
-// Liste tout article ayant une quantité en attente d'impression — que le code-barres
-// vienne d'être généré dans l'app OU qu'il ait été reçu en stock (import ou réception).
 async function listerCodesAImprimer(req, res) {
   const articles = await prisma.article.findMany({
     where: { quantiteAImprimer: { gt: 0 }, actif: true },
@@ -191,8 +185,6 @@ async function listerCodesAImprimer(req, res) {
 }
 
 // POST /api/articles/a-imprimer/etiquettes   { lignes: [{ articleId, quantite }] }
-// Imprime le nombre d'étiquettes demandé par article (modifiable par rapport à la
-// quantité suggérée), puis remet leur compteur d'attente à zéro.
 async function imprimerEtiquettes(req, res) {
   const { lignes } = req.body;
   if (!Array.isArray(lignes) || lignes.length === 0) {
