@@ -134,6 +134,8 @@ model Article {
   prixVente       Decimal
   stockActuel     Int          @default(0)
   seuilAlerte     Int          @default(5)
+  quantiteAImprimer Int       @default(0)
+  datePeremption    DateTime?
   actif           Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt

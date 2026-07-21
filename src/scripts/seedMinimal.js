@@ -35,36 +35,42 @@ async function main() {
     console.log('Rôle "Caissier" créé.');
   }
 
-  // Lieux de base
+  // Lieux de base — Archange Bébé a 2 boutiques dès le départ, plus un entrepôt
   let entrepot = await prisma.lieu.findUnique({ where: { nom: 'Entrepôt principal' } });
   if (!entrepot) {
     entrepot = await prisma.lieu.create({ data: { nom: 'Entrepôt principal', type: 'ENTREPOT' } });
     console.log('Lieu "Entrepôt principal" créé.');
   }
 
-  let boutique = await prisma.lieu.findUnique({ where: { nom: 'Boutique Jesma U' } });
-  if (!boutique) {
-    boutique = await prisma.lieu.create({ data: { nom: 'Boutique Jesma U', type: 'BOUTIQUE' } });
-    console.log('Lieu "Boutique Jesma U" créé.');
+  let boutiquePrincipale = await prisma.lieu.findUnique({ where: { nom: 'Boutique Principale' } });
+  if (!boutiquePrincipale) {
+    boutiquePrincipale = await prisma.lieu.create({ data: { nom: 'Boutique Principale', type: 'BOUTIQUE' } });
+    console.log('Lieu "Boutique Principale" créé.');
   }
 
-  // Compte Victoria
-  const existant = await prisma.utilisateur.findUnique({ where: { nomUtilisateur: 'victoria' } });
+  let boutiqueSecondaire = await prisma.lieu.findUnique({ where: { nom: 'Boutique Secondaire' } });
+  if (!boutiqueSecondaire) {
+    boutiqueSecondaire = await prisma.lieu.create({ data: { nom: 'Boutique Secondaire', type: 'BOUTIQUE' } });
+    console.log('Lieu "Boutique Secondaire" créé.');
+  }
+
+  // Compte Administrateur
+  const existant = await prisma.utilisateur.findUnique({ where: { nomUtilisateur: 'administrateur' } });
   if (!existant) {
     const pinHache = await bcrypt.hash('1234', 10);
     await prisma.utilisateur.create({
       data: {
-        nomUtilisateur: 'victoria',
+        nomUtilisateur: 'administrateur',
         pin: pinHache,
-        nomComplet: 'Victoria',
+        nomComplet: 'Administrateur',
         role: 'ADMIN',
         roleId: admin.id,
-        lieuId: boutique.id,
+        lieuId: boutiquePrincipale.id,
       },
     });
-    console.log('Compte "victoria" créé (PIN 1234).');
+    console.log('Compte "administrateur" créé (PIN 1234).');
   } else {
-    console.log('Compte "victoria" déjà existant, ignoré.');
+    console.log('Compte "administrateur" déjà existant, ignoré.');
   }
 
   // Dénominations de cartes cadeaux de base

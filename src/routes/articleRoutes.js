@@ -10,7 +10,7 @@ const upload = require('../middleware/upload');
 router.get('/', requireAuth, listerArticles);
 router.get('/recherche', requireAuth, rechercherArticle);
 router.get('/a-imprimer', requireAuth, requireRole('ADMIN'), listerCodesAImprimer);
-router.get('/a-imprimer/etiquettes', requireAuth, requireRole('ADMIN'), imprimerEtiquettes);
+router.post('/a-imprimer/etiquettes', requireAuth, requireRole('ADMIN'), imprimerEtiquettes);
 router.post('/', requireAuth, requireRole('ADMIN'), creerArticle);
 router.put('/:id', requireAuth, requireRole('ADMIN'), modifierArticle);
 router.post('/:id/generer-code-barre', requireAuth, requireRole('ADMIN'), genererCodeBarre);

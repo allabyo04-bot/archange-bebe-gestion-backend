@@ -15,7 +15,7 @@ async function creerReception(req, res) {
     const reception = await prisma.$transaction(async (tx) => {
       const rec = await tx.reception.create({
         data: {
-          fournisseur: fournisseur || null, // volontairement optionnel
+          fournisseur: fournisseur || null,
           reference: reference || null,
           lieuId: Number(lieuId),
           notes: notes || null,
@@ -31,10 +31,15 @@ async function creerReception(req, res) {
       });
 
       for (const ligne of rec.lignes) {
-        // Le dernier prix d'achat connu sert de base au calcul de marge dans les États
+        // Le dernier prix d'achat connu sert de base au calcul de marge dans les États.
+        // La quantité reçue vient aussi grossir la file d'attente d'étiquettes à imprimer,
+        // pour proposer par défaut le bon nombre d'étiquettes (modifiable avant impression).
         await tx.article.update({
           where: { id: ligne.articleId },
-          data: { prixAchat: ligne.prixAchat },
+          data: {
+            prixAchat: ligne.prixAchat,
+            quantiteAImprimer: { increment: ligne.quantite },
+          },
         });
 
         await appliquerMouvementStock(tx, {

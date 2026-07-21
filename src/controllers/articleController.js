@@ -56,14 +56,10 @@ async function rechercherArticle(req, res) {
 }
 
 // POST /api/articles
-// Famille et sous-famille sont désormais obligatoires. La référence n'est plus saisie
-// à la main : elle est générée automatiquement à partir du code de la sous-famille
-// (ex: "ANDT" + numéro suivant = "ANDT06"), de façon atomique pour éviter les doublons
-// si deux créations arrivent en même temps.
 async function creerArticle(req, res) {
   const {
     codeBarre, codeInterne, designation,
-    familleId, sousFamilleId, prixAchat, prixVente, seuilAlerte,
+    familleId, sousFamilleId, prixAchat, prixVente, seuilAlerte, datePeremption,
   } = req.body;
 
   if (!designation || !familleId || !sousFamilleId || prixVente === undefined) {
@@ -94,6 +90,7 @@ async function creerArticle(req, res) {
           prixAchat: prixAchat || 0,
           prixVente,
           seuilAlerte: seuilAlerte ?? 5,
+          datePeremption: datePeremption ? new Date(datePeremption) : null,
         },
       });
     });
@@ -105,13 +102,11 @@ async function creerArticle(req, res) {
 }
 
 // PUT /api/articles/:id
-// La référence n'est jamais modifiable ici (elle reste liée à la sous-famille d'origine),
-// tout comme le code-barre (géré via "Générer un code-barre").
 async function modifierArticle(req, res) {
   const id = Number(req.params.id);
   const {
     designation, familleId, sousFamilleId,
-    prixAchat, prixVente, seuilAlerte, actif,
+    prixAchat, prixVente, seuilAlerte, actif, datePeremption,
   } = req.body;
 
   const article = await prisma.article.findUnique({ where: { id } });
@@ -133,11 +128,12 @@ async function modifierArticle(req, res) {
       prixVente,
       seuilAlerte: seuilAlerte ?? article.seuilAlerte,
       actif: actif !== undefined ? actif : article.actif,
+      datePeremption: datePeremption !== undefined
+        ? (datePeremption ? new Date(datePeremption) : null)
+        : article.datePeremption,
     },
   });
 
-  // Journal : uniquement si un des deux prix a réellement changé, pour ne pas polluer
-  // le journal avec des modifications qui ne touchent ni prix d'achat ni prix de vente.
   const prixAchatAvant = Number(article.prixAchat);
   const prixVenteAvant = Number(article.prixVente);
   const prixAchatApres = Number(misAJour.prixAchat);
@@ -173,42 +169,74 @@ async function genererCodeBarre(req, res) {
   const codeBarre = genererCodeBarreInterne(article.id);
   const misAJour = await prisma.article.update({
     where: { id },
-    data: { codeBarre, codeBarreGenere: true },
+    data: {
+      codeBarre,
+      codeBarreGenere: true,
+      quantiteAImprimer: article.quantiteAImprimer > 0 ? article.quantiteAImprimer : 1,
+    },
   });
 
   res.json(misAJour);
 }
 
 // GET /api/articles/a-imprimer
+// Liste tout article ayant une quantité en attente d'impression — que le code-barres
+// vienne d'être généré dans l'app OU qu'il ait été reçu en stock (import ou réception).
 async function listerCodesAImprimer(req, res) {
   const articles = await prisma.article.findMany({
-    where: { codeBarreGenere: true, actif: true },
+    where: { quantiteAImprimer: { gt: 0 }, actif: true },
     orderBy: { designation: 'asc' },
   });
   res.json(articles);
 }
 
-// GET /api/articles/a-imprimer/etiquettes
+// POST /api/articles/a-imprimer/etiquettes   { lignes: [{ articleId, quantite }] }
+// Imprime le nombre d'étiquettes demandé par article (modifiable par rapport à la
+// quantité suggérée), puis remet leur compteur d'attente à zéro.
 async function imprimerEtiquettes(req, res) {
-  const articles = await prisma.article.findMany({
-    where: { codeBarreGenere: true, actif: true },
-    orderBy: { designation: 'asc' },
+  const { lignes } = req.body;
+  if (!Array.isArray(lignes) || lignes.length === 0) {
+    return res.status(400).json({ error: 'Aucune étiquette à imprimer.' });
+  }
+
+  const ids = lignes.map((l) => Number(l.articleId));
+  const articles = await prisma.article.findMany({ where: { id: { in: ids } } });
+  const parId = Object.fromEntries(articles.map((a) => [a.id, a]));
+
+  const blocsEtiquettes = [];
+  for (const ligne of lignes) {
+    const article = parId[Number(ligne.articleId)];
+    if (!article || !article.codeBarre) continue;
+    const quantite = Math.max(1, Number(ligne.quantite) || 1);
+    for (let i = 0; i < quantite; i++) {
+      blocsEtiquettes.push(`
+        <div class="etiquette">
+          <div class="marque">Archange Bébé</div>
+          <div class="designation">${article.designation}</div>
+          <div class="prix">${Number(article.prixVente).toLocaleString('fr-FR')} F</div>
+          ${genererSvgEAN13(article.codeBarre)}
+          <div class="code">${article.codeBarre}</div>
+        </div>
+      `);
+    }
+  }
+
+  await prisma.article.updateMany({
+    where: { id: { in: ids } },
+    data: { quantiteAImprimer: 0 },
   });
 
-  const etiquettes = articles.map((a) => `
-    <div class="etiquette">
-      <div class="designation">${a.designation}</div>
-      <div class="prix">${Number(a.prixVente).toLocaleString('fr-FR')} F</div>
-      ${genererSvgEAN13(a.codeBarre)}
-      <div class="code">${a.codeBarre}</div>
-    </div>
-  `).join('\n');
+  const html = construireHtmlEtiquettes(blocsEtiquettes.join('\n'));
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+}
 
-  const html = `<!DOCTYPE html>
+function construireHtmlEtiquettes(contenu) {
+  return `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Étiquettes à imprimer - Jesma U</title>
+<title>Étiquettes à imprimer - Archange Bébé</title>
 <style>
   body { font-family: Arial, sans-serif; margin: 0; }
   .grille { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; }
@@ -216,6 +244,7 @@ async function imprimerEtiquettes(req, res) {
     width: 220px; border: 1px dashed #999; padding: 8px; text-align: center;
     page-break-inside: avoid;
   }
+  .marque { font-size: 10px; font-weight: bold; letter-spacing: 0.5px; color: #2E4E9E; margin-bottom: 3px; text-transform: uppercase; }
   .designation { font-size: 12px; font-weight: bold; margin-bottom: 4px; }
   .prix { font-size: 13px; margin-bottom: 4px; }
   .code { font-size: 11px; letter-spacing: 1px; margin-top: 2px; }
@@ -225,13 +254,10 @@ async function imprimerEtiquettes(req, res) {
 </style>
 </head>
 <body>
-  <div class="grille">${etiquettes || '<p>Aucune étiquette en attente.</p>'}</div>
+  <div class="grille">${contenu || '<p>Aucune étiquette en attente.</p>'}</div>
   <script>window.onload = () => window.print();</script>
 </body>
 </html>`;
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(html);
 }
 
 // POST /api/articles/:id/photo
@@ -247,7 +273,7 @@ async function uploaderPhoto(req, res) {
   try {
     const resultat = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: 'jesma-u/articles', resource_type: 'image' },
+        { folder: 'archange-bebe/articles', resource_type: 'image' },
         (error, result) => (error ? reject(error) : resolve(result)),
       );
       stream.end(req.file.buffer);
