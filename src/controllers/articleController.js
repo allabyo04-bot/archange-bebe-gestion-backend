@@ -205,9 +205,10 @@ async function imprimerEtiquettes(req, res) {
   const parId = Object.fromEntries(articles.map((a) => [a.id, a]));
 
   const blocsEtiquettes = [];
+  const articlesIgnores = [];
   for (const ligne of lignes) {
     const article = parId[Number(ligne.articleId)];
-    if (!article || !article.codeBarre) continue;
+    if (!article) continue;
     const quantite = Math.max(1, Number(ligne.quantite) || 1);
     for (let i = 0; i < quantite; i++) {
       blocsEtiquettes.push(`
@@ -215,8 +216,9 @@ async function imprimerEtiquettes(req, res) {
           <div class="marque">Archange Bébé</div>
           <div class="designation">${article.designation}</div>
           <div class="prix">${Number(article.prixVente).toLocaleString('fr-FR')} F</div>
-          ${genererSvgEAN13(article.codeBarre)}
-          <div class="code">${article.codeBarre}</div>
+          ${article.codeBarre ? genererSvgEAN13(article.codeBarre) : ''}
+          ${article.codeBarre ? `<div class="code">${article.codeBarre}</div>` : ''}
+          <div class="reference">${article.reference}</div>
         </div>
       `);
     }
@@ -249,6 +251,7 @@ function construireHtmlEtiquettes(contenu) {
   .designation { font-size: 12px; font-weight: bold; margin-bottom: 4px; }
   .prix { font-size: 13px; margin-bottom: 4px; }
   .code { font-size: 11px; letter-spacing: 1px; margin-top: 2px; }
+  .reference { font-size: 12px; font-weight: bold; letter-spacing: 1px; margin-top: 3px; font-family: 'Courier New', monospace; }
   @media print {
     .etiquette { border: 1px solid #000; }
   }

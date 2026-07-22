@@ -46,4 +46,50 @@ async function creerSousFamille(req, res) {
   }
 }
 
-module.exports = { listerFamilles, creerFamille, creerSousFamille };
+// PUT /api/familles/:id  { nom }
+async function modifierFamille(req, res) {
+  const id = Number(req.params.id);
+  const { nom } = req.body;
+  if (!nom || !nom.trim()) return res.status(400).json({ error: 'Le nom de la famille est requis.' });
+  try {
+    const famille = await prisma.famille.update({ where: { id }, data: { nom: nom.trim() } });
+    res.json(famille);
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Une famille porte déjà ce nom.' });
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Famille introuvable.' });
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+}
+
+// PUT /api/familles/:familleId/sous-familles/:id  { nom, codePrefixe, dernierNumero }
+// Modifie une sous-famille existante. Changer le préfixe ou le dernier numéro ne
+// touche pas la référence des articles déjà créés — cela influence seulement le
+// prochain code généré pour un futur article de cette sous-famille.
+async function modifierSousFamille(req, res) {
+  const id = Number(req.params.id);
+  const { nom, codePrefixe, dernierNumero } = req.body;
+  const data = {};
+  if (nom !== undefined) {
+    if (!nom.trim()) return res.status(400).json({ error: 'Le nom ne peut pas être vide.' });
+    data.nom = nom.trim();
+  }
+  if (codePrefixe !== undefined) {
+    if (!codePrefixe.trim()) return res.status(400).json({ error: 'Le préfixe ne peut pas être vide.' });
+    data.codePrefixe = codePrefixe.trim().toUpperCase();
+  }
+  if (dernierNumero !== undefined) {
+    const n = Number(dernierNumero);
+    if (Number.isNaN(n) || n < 0) return res.status(400).json({ error: 'Le dernier numéro doit être un nombre positif.' });
+    data.dernierNumero = n;
+  }
+  try {
+    const sousFamille = await prisma.sousFamille.update({ where: { id }, data });
+    res.json(sousFamille);
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Ce nom ou ce préfixe est déjà utilisé.' });
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Sous-famille introuvable.' });
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+}
+
+module.exports = { listerFamilles, creerFamille, creerSousFamille, modifierFamille, modifierSousFamille };
