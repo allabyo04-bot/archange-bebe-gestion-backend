@@ -41,13 +41,22 @@ async function rechercherArticle(req, res) {
   if (!article) {
     article = await prisma.article.findFirst({ where: { codeInterne: q, actif: true } });
   }
+  if (!article) {
+    article = await prisma.article.findFirst({ where: { reference: { equals: q, mode: 'insensitive' }, actif: true } });
+  }
   if (article) {
     const [resultat] = await ajouterStockLieu([article]);
     return res.json({ mode: 'exact', resultats: [resultat] });
   }
 
   const resultats = await prisma.article.findMany({
-    where: { actif: true, designation: { contains: q, mode: 'insensitive' } },
+    where: {
+      actif: true,
+      OR: [
+        { designation: { contains: q, mode: 'insensitive' } },
+        { reference: { contains: q, mode: 'insensitive' } },
+      ],
+    },
     take: 20,
     orderBy: { designation: 'asc' },
   });
