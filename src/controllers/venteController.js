@@ -161,15 +161,28 @@ async function creerVente(req, res) {
       });
 
       for (const ligne of vente.lignes) {
-        await appliquerMouvementStock(tx, {
-          articleId: ligne.articleId,
-          lieuId: Number(lieuId),
-          delta: -ligne.quantite,
-          type: 'SORTIE_VENTE',
-          utilisateurId,
-          refVenteId: vente.id,
-          notes: `Vente ${vente.numero}`,
-        });
+        try {
+          await appliquerMouvementStock(tx, {
+            articleId: ligne.articleId,
+            lieuId: Number(lieuId),
+            delta: -ligne.quantite,
+            type: 'SORTIE_VENTE',
+            utilisateurId,
+            refVenteId: vente.id,
+            notes: `Vente ${vente.numero}`,
+          });
+        } catch (err) {
+          if (err.message.startsWith('Stock insuffisant')) {
+            const [article, lieu] = await Promise.all([
+              tx.article.findUnique({ where: { id: ligne.articleId } }),
+              tx.lieu.findUnique({ where: { id: Number(lieuId) } }),
+            ]);
+            throw new Error(
+              `Stock insuffisant pour "${article?.designation || ligne.articleId}" à ${lieu?.nom || 'cette boutique'} — vérifie la quantité disponible avant de valider.`
+            );
+          }
+          throw err;
+        }
       }
 
       if (carteCadeau) {
