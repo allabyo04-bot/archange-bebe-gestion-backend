@@ -64,6 +64,31 @@ async function modifierPermission(req, res) {
   res.json(misAJour);
 }
 
+// PUT /api/roles/:id/plafond-remise   { plafondRemisePourcent }
+// Règle le pourcentage de remise que ce rôle peut accorder sans PIN admin.
+async function modifierPlafondRemise(req, res) {
+  const id = Number(req.params.id);
+  const { plafondRemisePourcent } = req.body;
+  const valeur = Number(plafondRemisePourcent);
+
+  if (Number.isNaN(valeur) || valeur < 0 || valeur > 100) {
+    return res.status(400).json({ error: 'Le plafond doit être un pourcentage entre 0 et 100.' });
+  }
+
+  const role = await prisma.role.findUnique({ where: { id } });
+  if (!role) return res.status(404).json({ error: 'Rôle introuvable.' });
+  if (!role.modifiable) {
+    return res.status(400).json({ error: 'Ce rôle (Administrateur) ne peut pas être modifié — il n\'a de toute façon aucun plafond.' });
+  }
+
+  const misAJour = await prisma.role.update({
+    where: { id },
+    data: { plafondRemisePourcent: valeur },
+    include: { permissions: true },
+  });
+  res.json(misAJour);
+}
+
 // DELETE /api/roles/:id
 // Refuse la suppression si le rôle est encore assigné à un ou plusieurs employés.
 async function supprimerRole(req, res) {
@@ -85,4 +110,4 @@ async function supprimerRole(req, res) {
   res.json({ ok: true });
 }
 
-module.exports = { listerRoles, creerRole, modifierPermission, supprimerRole };
+module.exports = { listerRoles, creerRole, modifierPermission, modifierPlafondRemise, supprimerRole };

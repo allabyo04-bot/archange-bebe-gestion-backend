@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const prisma = require('../lib/prisma');
 const { appliquerMouvementStock } = require('../lib/stock');
 const { enregistrerActivite } = require('../lib/journal');
@@ -8,6 +9,30 @@ const SEUIL_FIDELITE_ACHATS = 10;
 function genererNumeroVente() {
   const maintenant = new Date();
   return `V-${maintenant.getTime()}`;
+}
+
+// Pourcentage de remise que l'utilisateur connecté peut accorder librement, sans PIN
+// admin. Un ADMIN "à l'ancienne" (rôle natif) n'a pas de plafond. Un CAISSIER sans
+// rôle dynamique assigné a un plafond de 0% (toute remise nécessite le PIN).
+async function obtenirPlafondRemisePourcent(reqUser) {
+  if (reqUser.role === 'ADMIN') return 100;
+  const utilisateur = await prisma.utilisateur.findUnique({
+    where: { id: reqUser.id },
+    include: { roleDynamique: true },
+  });
+  if (!utilisateur?.roleDynamique) return 0;
+  return Number(utilisateur.roleDynamique.plafondRemisePourcent);
+}
+
+// Vérifie un PIN contre tous les comptes ADMIN actifs (peu nombreux). Retourne le
+// compte correspondant, ou null si aucun ne correspond.
+async function verifierPinAdmin(pin) {
+  if (!pin) return null;
+  const admins = await prisma.utilisateur.findMany({ where: { role: 'ADMIN', actif: true } });
+  for (const admin of admins) {
+    if (await bcrypt.compare(pin, admin.pin)) return admin;
+  }
+  return null;
 }
 
 async function mettreAJourFidelite(tx, clientId, totalNet) {
@@ -44,7 +69,7 @@ async function mettreAJourFidelite(tx, clientId, totalNet) {
 // POST /api/ventes
 async function creerVente(req, res) {
   const {
-    clientId, vendeurId, lieuId, remiseMontant, motifRemise,
+    clientId, vendeurId, lieuId, remisePourcent, motifRemise, remisePin,
     carteCadeauCode, avoirCode, typeVente, lignes, paiements,
   } = req.body;
   const utilisateurId = req.user.id;
@@ -77,13 +102,34 @@ async function creerVente(req, res) {
     }
   }
 
+  // La remise est saisie en % côté caisse ; le montant en F est toujours recalculé
+  // ici (jamais fait confiance à un montant envoyé par le client) pour empêcher un
+  // contournement du plafond via une requête modifiée.
+  const totalHTBrut = lignes.reduce(
+    (somme, l) => somme + Number(l.prixUnitaire) * Number(l.quantite) - Number(l.remiseLigne || 0),
+    0
+  );
+  const pourcentageRemise = Math.min(Math.max(Number(remisePourcent) || 0, 0), 100);
+  const remise = Math.round((totalHTBrut * pourcentageRemise) / 100);
+
+  let autorisateurPin = null;
+  if (remise > 0) {
+    const plafond = await obtenirPlafondRemisePourcent(req.user);
+    if (pourcentageRemise > plafond) {
+      const admin = await verifierPinAdmin(remisePin);
+      if (!admin) {
+        return res.status(403).json({
+          error: `Remise de ${pourcentageRemise}% au-delà du plafond autorisé (${plafond}%) — PIN administrateur requis.`,
+          pinAdminRequis: true,
+        });
+      }
+      autorisateurPin = admin;
+    }
+  }
+
   try {
     const resultat = await prisma.$transaction(async (tx) => {
-      const totalHT = lignes.reduce(
-        (somme, l) => somme + Number(l.prixUnitaire) * Number(l.quantite) - Number(l.remiseLigne || 0),
-        0
-      );
-      const remise = Number(remiseMontant || 0);
+      const totalHT = totalHTBrut;
       let totalNet = totalHT - remise;
 
       let avoir = null;
@@ -138,6 +184,7 @@ async function creerVente(req, res) {
           typeVente: type,
           totalHT,
           remiseMontant: remise,
+          remisePourcent: remise > 0 ? pourcentageRemise : null,
           totalNet,
           modePaiement: modePaiementResume,
           carteCadeauUtiliseeId: carteCadeau ? carteCadeau.id : null,
@@ -216,8 +263,18 @@ async function creerVente(req, res) {
             demandeurId: utilisateurId,
             montantDemande: remise,
             motif: motifRemise || null,
+            statut: 'APPROUVEE',
+            approbateurId: autorisateurPin ? autorisateurPin.id : null,
+            resolvedAt: new Date(),
           },
         });
+        if (autorisateurPin) {
+          await enregistrerActivite(tx, {
+            type: 'REMISE_APPROUVEE',
+            description: `Remise de ${pourcentageRemise}% (${remise.toLocaleString('fr-FR')} F) débloquée par PIN admin (${autorisateurPin.nomComplet}) sur la vente ${vente.numero}`,
+            utilisateurId,
+          });
+        }
       }
 
       await mettreAJourFidelite(tx, clientIdFinal, totalNet);

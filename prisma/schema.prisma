@@ -34,6 +34,9 @@ model Role {
   nom         String           @unique
   estAdmin    Boolean          @default(false)
   modifiable  Boolean          @default(true)
+  // Pourcentage de remise que ce rôle peut accorder librement, sans PIN admin.
+  // 0 par défaut = toute remise nécessite le PIN d'un administrateur.
+  plafondRemisePourcent Decimal @default(0)
   createdAt   DateTime         @default(now())
 
   permissions   RolePermission[]
@@ -359,6 +362,7 @@ model Vente {
   typeVente      TypeVente    @default(COMPTANT)
   totalHT        Decimal
   remiseMontant  Decimal      @default(0)
+  remisePourcent Decimal?
   totalNet       Decimal
   modePaiement   String?
   carteCadeauUtiliseeId Int?
