@@ -7,6 +7,7 @@ const { creerReception, listerReceptions } = require('../controllers/receptionCo
 const { creerTransfert, listerTransferts } = require('../controllers/transfertController');
 const { previsualiserImport, confirmerImport } = require('../controllers/importStockController');
 const { listerMouvements } = require('../controllers/mouvementController');
+const { previsualiserInventaire, appliquerInventaire } = require('../controllers/inventaireController');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
 router.get('/lieux', requireAuth, listerLieux);
@@ -18,6 +19,8 @@ router.post('/receptions', requireAuth, requireRole('ADMIN'), creerReception);
 router.get('/transferts', requireAuth, listerTransferts);
 router.post('/transferts', requireAuth, requireRole('ADMIN'), creerTransfert);
 router.get('/mouvements', requireAuth, listerMouvements);
+router.get('/inventaire', requireAuth, requireRole('ADMIN'), previsualiserInventaire);
+router.post('/inventaire', requireAuth, requireRole('ADMIN'), appliquerInventaire);
 router.post('/import/previsualiser', requireAuth, requireRole('ADMIN'), upload.single('fichier'), previsualiserImport);
 router.post('/import/confirmer', requireAuth, requireRole('ADMIN'), confirmerImport);
 
