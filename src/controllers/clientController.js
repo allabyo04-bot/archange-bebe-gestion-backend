@@ -1,5 +1,9 @@
 const prisma = require('../lib/prisma');
 
+function estNomComptoir(nom) {
+  return nom.trim().toLowerCase() === 'client comptoir';
+}
+
 // GET /api/clients?q=recherche
 async function listerClients(req, res) {
   const { q } = req.query;
@@ -16,7 +20,12 @@ async function creerClient(req, res) {
   if (!nomComplet) return res.status(400).json({ error: 'Nom complet requis.' });
 
   const client = await prisma.client.create({
-    data: { nomComplet, telephone: telephone || null, email: email || null },
+    data: {
+      nomComplet,
+      telephone: telephone || null,
+      email: email || null,
+      estComptoir: estNomComptoir(nomComplet),
+    },
   });
   res.status(201).json(client);
 }
@@ -46,12 +55,14 @@ async function modifierClient(req, res) {
   const client = await prisma.client.findUnique({ where: { id } });
   if (!client) return res.status(404).json({ error: 'Client introuvable.' });
 
+  const nouveauNom = nomComplet ?? client.nomComplet;
   const misAJour = await prisma.client.update({
     where: { id },
     data: {
-      nomComplet: nomComplet ?? client.nomComplet,
+      nomComplet: nouveauNom,
       telephone: telephone !== undefined ? (telephone || null) : client.telephone,
       email: email !== undefined ? (email || null) : client.email,
+      estComptoir: estNomComptoir(nouveauNom),
     },
   });
   res.json(misAJour);

@@ -84,12 +84,22 @@ async function creerVente(req, res) {
   }
 
   // Une vente est toujours associée à un client, quitte à retomber sur "Client Comptoir"
-  // si le frontend n'en a envoyé aucun (garde-fou côté serveur, en plus de celui du front).
+  // si le frontend n'en a envoyé aucun. On ne bloque plus jamais la vente pour cette
+  // raison : on cherche le client comptoir par son indicateur, puis par son nom (au cas
+  // où l'indicateur n'aurait pas été posé), et on le crée s'il n'existe vraiment pas.
   let clientIdFinal = clientId ? Number(clientId) : null;
   if (!clientIdFinal) {
-    const comptoir = await prisma.client.findFirst({ where: { estComptoir: true } });
+    let comptoir = await prisma.client.findFirst({ where: { estComptoir: true } });
     if (!comptoir) {
-      return res.status(400).json({ error: 'Aucun client sélectionné, et "Client Comptoir" n\'existe pas encore.' });
+      comptoir = await prisma.client.findFirst({
+        where: { nomComplet: { equals: 'Client Comptoir', mode: 'insensitive' } },
+      });
+      if (comptoir && !comptoir.estComptoir) {
+        comptoir = await prisma.client.update({ where: { id: comptoir.id }, data: { estComptoir: true } });
+      }
+    }
+    if (!comptoir) {
+      comptoir = await prisma.client.create({ data: { nomComplet: 'Client Comptoir', estComptoir: true } });
     }
     clientIdFinal = comptoir.id;
   }
