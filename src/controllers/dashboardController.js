@@ -10,6 +10,12 @@ function finAujourdhui() {
   d.setHours(23, 59, 59, 999);
   return d;
 }
+function debutMoisEnCours() {
+  const d = new Date();
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 // GET /api/dashboard
 async function obtenirDashboard(req, res) {
@@ -18,7 +24,7 @@ async function obtenirDashboard(req, res) {
     createdAt: { gte: debutAujourdhui(), lte: finAujourdhui() },
   };
 
-  const [ventesDuJour, depensesDuJour, demandesRemiseEnAttente, recompensesEnAttente] =
+  const [ventesDuJour, depensesDuJour, demandesRemiseEnAttente, recompensesEnAttente, ventesAvecRemiseMois] =
     await Promise.all([
       prisma.vente.findMany({ where }),
       prisma.depense.findMany({
@@ -26,6 +32,10 @@ async function obtenirDashboard(req, res) {
       }),
       prisma.demandeRemise.count({ where: { statut: 'EN_ATTENTE' } }),
       prisma.recompenseFidelite.count({ where: { statut: 'EN_ATTENTE' } }),
+      prisma.vente.findMany({
+        where: { statut: 'VALIDEE', remiseMontant: { gt: 0 }, createdAt: { gte: debutMoisEnCours() } },
+        select: { remiseMontant: true, createdAt: true },
+      }),
     ]);
 
   // Prisma ne compare pas nativement deux colonnes entre elles (stockActuel <= seuilAlerte) ;
@@ -35,6 +45,9 @@ async function obtenirDashboard(req, res) {
 
   const totalVentes = ventesDuJour.reduce((s, v) => s + Number(v.totalNet), 0);
   const totalDepenses = depensesDuJour.reduce((s, d) => s + Number(d.montant), 0);
+
+  const debutJour = debutAujourdhui();
+  const remisesDuJour = ventesAvecRemiseMois.filter((v) => new Date(v.createdAt) >= debutJour);
 
   res.json({
     date: new Date().toISOString().slice(0, 10),
@@ -46,6 +59,16 @@ async function obtenirDashboard(req, res) {
     })),
     demandesRemiseEnAttente,
     recompensesFideliteEnAttente: recompensesEnAttente,
+    remises: {
+      jour: {
+        nombre: remisesDuJour.length,
+        total: remisesDuJour.reduce((s, v) => s + Number(v.remiseMontant), 0),
+      },
+      mois: {
+        nombre: ventesAvecRemiseMois.length,
+        total: ventesAvecRemiseMois.reduce((s, v) => s + Number(v.remiseMontant), 0),
+      },
+    },
   });
 }
 
