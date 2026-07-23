@@ -403,6 +403,18 @@ enum StatutDemandeRemise {
   REFUSEE
 }
 
+// Vente suspendue par une caissière (client parti chercher de l'argent, etc.) —
+// pas encore une vraie vente (pas de mouvement de stock, pas de paiement). Stockée
+// côté serveur pour être retrouvable depuis n'importe quel poste, contrairement à
+// l'ancien stockage local au navigateur.
+model VenteEnAttente {
+  id            Int      @id @default(autoincrement())
+  lieuId        Int
+  utilisateurId Int
+  donnees       Json     // panier, remisePourcent, motifRemise, vendeurId, clientId, typeVente
+  createdAt     DateTime @default(now())
+}
+
 model DemandeRemise {
   id             Int                 @id @default(autoincrement())
   venteId        Int

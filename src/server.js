@@ -22,6 +22,7 @@ const utilisateurRoutes = require('./routes/utilisateurRoutes');
 const fideliteRoutes = require('./routes/fideliteRoutes');
 const journalRoutes = require('./routes/journalRoutes');
 const roleRoutes = require('./routes/roleRoutes');
+const venteEnAttenteRoutes = require('./routes/venteEnAttenteRoutes');
 
 const app = express();
 app.use(cors());
@@ -35,6 +36,7 @@ app.use('/api/articles', articleRoutes);
 app.use('/api/stock', stockRoutes);
 app.use('/api/ventes', venteRoutes);
 app.use('/api/demandes-remise', demandeRemiseRoutes);
+app.use('/api/ventes-en-attente', venteEnAttenteRoutes);
 app.use('/api/cartes-cadeaux', carteCadeauRoutes);
 app.use('/api/listes-cadeaux', listeCadeauRoutes);
 app.use('/api/depenses', depenseRoutes);
