@@ -46,7 +46,7 @@ async function login(req, res) {
       permissions,
     },
     process.env.JWT_SECRET,
-    { expiresIn: '12h' }
+    { expiresIn: '7d' }
   );
 
   return res.json({
