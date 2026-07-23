@@ -241,24 +241,25 @@ function construireHtmlEtiquettes(contenu) {
 <meta charset="UTF-8">
 <title>Étiquettes à imprimer - Archange Bébé</title>
 <style>
+  @page { size: 40mm 25mm; margin: 0; }
+  * { box-sizing: border-box; }
   body { font-family: Arial, sans-serif; margin: 0; }
-  .grille { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; }
   .etiquette {
-    width: 220px; border: 1px dashed #999; padding: 8px; text-align: center;
-    page-break-inside: avoid;
+    width: 40mm; height: 25mm; padding: 1mm 1.5mm;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; overflow: hidden;
+    page-break-after: always; break-after: page;
   }
-  .marque { font-size: 10px; font-weight: bold; letter-spacing: 0.5px; color: #2E4E9E; margin-bottom: 3px; text-transform: uppercase; }
-  .designation { font-size: 12px; font-weight: bold; margin-bottom: 4px; }
-  .prix { font-size: 13px; margin-bottom: 4px; }
-  .code { font-size: 11px; letter-spacing: 1px; margin-top: 2px; }
-  .reference { font-size: 12px; font-weight: bold; letter-spacing: 1px; margin-top: 3px; font-family: 'Courier New', monospace; }
-  @media print {
-    .etiquette { border: 1px solid #000; }
-  }
+  .marque { font-size: 5.5px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
+  .designation { font-size: 7.5px; font-weight: bold; line-height: 1.1; margin-top: 0.5mm; max-height: 6mm; overflow: hidden; }
+  .prix { font-size: 8.5px; font-weight: bold; margin-top: 0.5mm; }
+  .etiquette svg { width: 34mm; height: 6mm; margin-top: 0.5mm; }
+  .code { font-size: 5.5px; letter-spacing: 0.3px; margin-top: 0.2mm; }
+  .reference { font-size: 6.5px; font-weight: bold; letter-spacing: 0.3px; margin-top: 0.3mm; font-family: 'Courier New', monospace; }
 </style>
 </head>
 <body>
-  <div class="grille">${contenu || '<p>Aucune étiquette en attente.</p>'}</div>
+  ${contenu || '<p>Aucune étiquette en attente.</p>'}
   <script>window.onload = () => window.print();</script>
 </body>
 </html>`;
