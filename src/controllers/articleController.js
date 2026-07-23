@@ -250,9 +250,9 @@ function construireHtmlEtiquettes(contenu) {
     text-align: center; overflow: hidden;
     page-break-after: always; break-after: page;
   }
-  .marque { font-size: 5.5px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
-  .designation { font-size: 7.5px; font-weight: bold; line-height: 1.1; margin-top: 0.5mm; max-height: 6mm; overflow: hidden; }
-  .prix { font-size: 8.5px; font-weight: bold; margin-top: 0.5mm; }
+  .marque { width: 100%; font-size: 5.5px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
+  .designation { width: 100%; font-size: 7.5px; font-weight: bold; line-height: 1.15; margin-top: 0.5mm; max-height: 6mm; overflow: hidden; word-wrap: break-word; }
+  .prix { width: 100%; font-size: 8.5px; font-weight: bold; margin-top: 0.5mm; }
   .etiquette svg { width: 34mm; height: 6mm; margin-top: 0.5mm; }
   .code { font-size: 5.5px; letter-spacing: 0.3px; margin-top: 0.2mm; }
   .reference { font-size: 6.5px; font-weight: bold; letter-spacing: 0.3px; margin-top: 0.3mm; font-family: 'Courier New', monospace; }
