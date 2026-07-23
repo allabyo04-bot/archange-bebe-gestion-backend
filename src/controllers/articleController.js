@@ -248,8 +248,8 @@ function construireHtmlEtiquettes(contenu) {
     width: 40mm; height: 25mm; padding: 1mm 1.5mm;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     text-align: center; overflow: hidden;
-    page-break-after: always; break-after: page;
   }
+  .etiquette:not(:last-child) { page-break-after: always; break-after: page; }
   .marque { width: 100%; font-size: 5.5px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
   .designation { width: 100%; font-size: 7.5px; font-weight: bold; line-height: 1.15; margin-top: 0.5mm; max-height: 6mm; overflow: hidden; word-wrap: break-word; }
   .prix { width: 100%; font-size: 8.5px; font-weight: bold; margin-top: 0.5mm; }
