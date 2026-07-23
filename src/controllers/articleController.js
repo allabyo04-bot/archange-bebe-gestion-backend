@@ -249,7 +249,6 @@ function construireHtmlEtiquettes(contenu) {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     text-align: center; overflow: hidden;
     page-break-after: always; break-after: page;
-    transform: rotate(180deg); /* le rouleau imprime tête en bas sans ça */
   }
   .marque { font-size: 5.5px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
   .designation { font-size: 7.5px; font-weight: bold; line-height: 1.1; margin-top: 0.5mm; max-height: 6mm; overflow: hidden; }
