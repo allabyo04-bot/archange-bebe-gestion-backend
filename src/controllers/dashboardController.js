@@ -49,6 +49,46 @@ async function obtenirDashboard(req, res) {
   const debutJour = debutAujourdhui();
   const remisesDuJour = ventesAvecRemiseMois.filter((v) => new Date(v.createdAt) >= debutJour);
 
+  // Résultat du mois par boutique (réservé à l'admin côté frontend, mais calculé ici
+  // pour toute boutique active — pas les entrepôts) : ventes − coût d'achat des
+  // articles vendus − dépenses affectées à cette boutique, comparé à l'objectif fixé.
+  const debutMois = debutMoisEnCours();
+  const boutiques = await prisma.lieu.findMany({ where: { type: 'BOUTIQUE', actif: true } });
+
+  const parBoutique = await Promise.all(boutiques.map(async (b) => {
+    const [lignesVenduesMois, depensesLieuMois] = await Promise.all([
+      prisma.ligneVente.findMany({
+        where: { vente: { lieuId: b.id, statut: 'VALIDEE', createdAt: { gte: debutMois } } },
+        select: { quantite: true, article: { select: { prixAchat: true } } },
+      }),
+      prisma.depense.findMany({
+        where: { lieuId: b.id, dateDepense: { gte: debutMois } },
+        select: { montant: true },
+      }),
+    ]);
+
+    const ventesLieuMois = await prisma.vente.findMany({
+      where: { lieuId: b.id, statut: 'VALIDEE', createdAt: { gte: debutMois } },
+      select: { totalNet: true },
+    });
+
+    const totalVentesLieu = ventesLieuMois.reduce((s, v) => s + Number(v.totalNet), 0);
+    const coutMarchandise = lignesVenduesMois.reduce((s, l) => s + l.quantite * Number(l.article.prixAchat), 0);
+    const totalDepensesLieu = depensesLieuMois.reduce((s, d) => s + Number(d.montant), 0);
+    const objectif = Number(b.objectifMensuel);
+
+    return {
+      lieuId: b.id,
+      nom: b.nom,
+      objectifMensuel: objectif,
+      ventesMois: totalVentesLieu,
+      pourcentageObjectif: objectif > 0 ? Math.round((totalVentesLieu / objectif) * 1000) / 10 : 0,
+      coutMarchandiseMois: coutMarchandise,
+      depensesMois: totalDepensesLieu,
+      margeMois: totalVentesLieu - coutMarchandise - totalDepensesLieu,
+    };
+  }));
+
   res.json({
     date: new Date().toISOString().slice(0, 10),
     ventes: { nombre: ventesDuJour.length, total: totalVentes },
@@ -69,6 +109,7 @@ async function obtenirDashboard(req, res) {
         total: ventesAvecRemiseMois.reduce((s, v) => s + Number(v.remiseMontant), 0),
       },
     },
+    parBoutique,
   });
 }
 

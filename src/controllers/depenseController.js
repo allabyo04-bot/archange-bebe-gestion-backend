@@ -35,7 +35,7 @@ async function listerDepenses(req, res) {
 
   const depenses = await prisma.depense.findMany({
     where,
-    include: { categorie: true, utilisateur: { select: { id: true, nomComplet: true } } },
+    include: { categorie: true, utilisateur: { select: { id: true, nomComplet: true } }, lieu: true },
     orderBy: { dateDepense: 'desc' },
   });
   res.json(depenses);
@@ -43,7 +43,7 @@ async function listerDepenses(req, res) {
 
 // POST /api/depenses   { categorieId, montant, description?, dateDepense? }
 async function creerDepense(req, res) {
-  const { categorieId, montant, description, dateDepense } = req.body;
+  const { categorieId, montant, description, dateDepense, lieuId } = req.body;
   if (!categorieId || !montant) {
     return res.status(400).json({ error: 'Catégorie et montant sont requis.' });
   }
@@ -55,8 +55,9 @@ async function creerDepense(req, res) {
       description: description || null,
       utilisateurId: req.user.id,
       dateDepense: dateDepense ? new Date(dateDepense) : new Date(),
+      lieuId: lieuId ? Number(lieuId) : null,
     },
-    include: { categorie: true },
+    include: { categorie: true, lieu: true },
   });
   res.status(201).json(depense);
 }

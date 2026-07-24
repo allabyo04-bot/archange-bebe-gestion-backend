@@ -19,10 +19,10 @@ async function creerLieu(req, res) {
   }
 }
 
-// PUT /api/stock/lieux/:id  { nom?, type?, actif? }
+// PUT /api/stock/lieux/:id  { nom?, type?, actif?, objectifMensuel? }
 async function modifierLieu(req, res) {
   const id = Number(req.params.id);
-  const { nom, type, actif } = req.body;
+  const { nom, type, actif, objectifMensuel } = req.body;
 
   const lieu = await prisma.lieu.findUnique({ where: { id } });
   if (!lieu) return res.status(404).json({ error: 'Lieu introuvable.' });
@@ -34,6 +34,7 @@ async function modifierLieu(req, res) {
         nom: nom ?? lieu.nom,
         type: type ?? lieu.type,
         actif: actif !== undefined ? actif : lieu.actif,
+        objectifMensuel: objectifMensuel !== undefined ? Number(objectifMensuel) : lieu.objectifMensuel,
       },
     });
     res.json(misAJour);

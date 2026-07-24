@@ -165,6 +165,9 @@ model Lieu {
   nom    String   @unique
   type   TypeLieu
   actif  Boolean  @default(true)
+  // Objectif de chiffre d'affaires mensuel pour cette boutique (affiché sur le
+  // tableau de bord admin) — sans effet sur les entrepôts.
+  objectifMensuel Decimal @default(15000000)
 
   stocks                StockEmplacement[]
   receptions            Reception[]
@@ -175,6 +178,7 @@ model Lieu {
   utilisateurs          Utilisateur[]
   carteCadeauCycles CarteCadeauCycle[]
   vendeurs              Vendeur[]
+  depenses              Depense[]
 }
 
 model StockEmplacement {
@@ -612,6 +616,10 @@ model Depense {
   description    String?
   utilisateurId  Int
   utilisateur    Utilisateur      @relation(fields: [utilisateurId], references: [id])
+  // Optionnelle pour ne pas casser les dépenses déjà saisies avant ce champ —
+  // permet de calculer un résultat net par boutique sur le tableau de bord.
+  lieuId         Int?
+  lieu           Lieu?            @relation(fields: [lieuId], references: [id])
   dateDepense    DateTime         @default(now())
   createdAt      DateTime         @default(now())
 }
