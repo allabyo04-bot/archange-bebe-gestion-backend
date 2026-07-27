@@ -68,7 +68,7 @@ async function obtenirDashboard(req, res) {
   });
 
   const parBoutique = await Promise.all(boutiques.map(async (b) => {
-    const [lignesVenduesMois, depensesLieuMois] = await Promise.all([
+    const [lignesVenduesMois, depensesLieuMois, ventesLieuJour] = await Promise.all([
       prisma.ligneVente.findMany({
         where: { vente: { lieuId: b.id, statut: 'VALIDEE', createdAt: { gte: debutMois } } },
         select: { quantite: true, article: { select: { prixAchat: true } } },
@@ -76,6 +76,10 @@ async function obtenirDashboard(req, res) {
       prisma.depense.findMany({
         where: { lieuId: b.id, dateDepense: { gte: debutMois } },
         select: { montant: true },
+      }),
+      prisma.vente.findMany({
+        where: { lieuId: b.id, statut: 'VALIDEE', createdAt: { gte: debutJour } },
+        select: { totalNet: true },
       }),
     ]);
 
@@ -93,6 +97,10 @@ async function obtenirDashboard(req, res) {
       lieuId: b.id,
       nom: b.nom,
       objectifMensuel: objectif,
+      ventesJour: {
+        nombre: ventesLieuJour.length,
+        total: ventesLieuJour.reduce((s, v) => s + Number(v.totalNet), 0),
+      },
       ventesMois: totalVentesLieu,
       pourcentageObjectif: objectif > 0 ? Math.round((totalVentesLieu / objectif) * 1000) / 10 : 0,
       coutMarchandiseMois: coutMarchandise,
