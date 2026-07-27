@@ -12,7 +12,7 @@ async function login(req, res) {
 
   const utilisateur = await prisma.utilisateur.findUnique({
     where: { nomUtilisateur },
-    include: { roleDynamique: { include: { permissions: true } } },
+    include: { roleDynamique: { include: { permissions: true } }, lieu: true },
   });
 
   if (!utilisateur || !utilisateur.actif) {
@@ -58,6 +58,8 @@ async function login(req, res) {
       role: utilisateur.role,
       roleNom: utilisateur.roleDynamique?.nom || null,
       permissions,
+      lieuId: utilisateur.lieuId,
+      lieuNom: utilisateur.lieu?.nom || null,
     },
   });
 }
@@ -66,7 +68,10 @@ async function login(req, res) {
 async function me(req, res) {
   const utilisateur = await prisma.utilisateur.findUnique({
     where: { id: req.user.id },
-    select: { id: true, nomUtilisateur: true, nomComplet: true, role: true, actif: true },
+    select: {
+      id: true, nomUtilisateur: true, nomComplet: true, role: true, actif: true,
+      lieuId: true, lieu: { select: { nom: true } },
+    },
   });
   return res.json(utilisateur);
 }
