@@ -44,6 +44,7 @@ async function login(req, res) {
       nomUtilisateur: utilisateur.nomUtilisateur,
       role: utilisateur.role,
       permissions,
+      lieuId: utilisateur.lieuId,
     },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }

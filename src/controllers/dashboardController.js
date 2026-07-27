@@ -19,21 +19,31 @@ function debutMoisEnCours() {
 
 // GET /api/dashboard
 async function obtenirDashboard(req, res) {
+  // Un compte non-admin ne voit que les chiffres de SA boutique assignée ; un admin
+  // voit toujours tout (lieuFiltre reste undefined dans ce cas).
+  const lieuFiltre = req.user.role !== 'ADMIN' && req.user.lieuId ? req.user.lieuId : undefined;
+
   const where = {
     statut: 'VALIDEE',
     createdAt: { gte: debutAujourdhui(), lte: finAujourdhui() },
+    ...(lieuFiltre ? { lieuId: lieuFiltre } : {}),
+  };
+  const whereDepenses = {
+    dateDepense: { gte: debutAujourdhui(), lte: finAujourdhui() },
+    ...(lieuFiltre ? { lieuId: lieuFiltre } : {}),
   };
 
   const [ventesDuJour, depensesDuJour, demandesRemiseEnAttente, recompensesEnAttente, ventesAvecRemiseMois] =
     await Promise.all([
       prisma.vente.findMany({ where }),
-      prisma.depense.findMany({
-        where: { dateDepense: { gte: debutAujourdhui(), lte: finAujourdhui() } },
-      }),
+      prisma.depense.findMany({ where: whereDepenses }),
       prisma.demandeRemise.count({ where: { statut: 'EN_ATTENTE' } }),
       prisma.recompenseFidelite.count({ where: { statut: 'EN_ATTENTE' } }),
       prisma.vente.findMany({
-        where: { statut: 'VALIDEE', remiseMontant: { gt: 0 }, createdAt: { gte: debutMoisEnCours() } },
+        where: {
+          statut: 'VALIDEE', remiseMontant: { gt: 0 }, createdAt: { gte: debutMoisEnCours() },
+          ...(lieuFiltre ? { lieuId: lieuFiltre } : {}),
+        },
         select: { remiseMontant: true, createdAt: true },
       }),
     ]);
@@ -53,7 +63,9 @@ async function obtenirDashboard(req, res) {
   // pour toute boutique active — pas les entrepôts) : ventes − coût d'achat des
   // articles vendus − dépenses affectées à cette boutique, comparé à l'objectif fixé.
   const debutMois = debutMoisEnCours();
-  const boutiques = await prisma.lieu.findMany({ where: { type: 'BOUTIQUE', actif: true } });
+  const boutiques = await prisma.lieu.findMany({
+    where: { type: 'BOUTIQUE', actif: true, ...(lieuFiltre ? { id: lieuFiltre } : {}) },
+  });
 
   const parBoutique = await Promise.all(boutiques.map(async (b) => {
     const [lignesVenduesMois, depensesLieuMois] = await Promise.all([
