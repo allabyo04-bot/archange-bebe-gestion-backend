@@ -39,6 +39,13 @@ function restreindreAJourdhui(req, dateDebut, dateFin) {
   return { dateDebut: aujourdhui, dateFin: aujourdhui };
 }
 
+// Un compte non-admin ne peut jamais consulter une autre boutique que la sienne dans
+// États, quel que soit le lieuId envoyé côté client — imposé ici côté serveur.
+function restreindreLieu(req, lieuIdDemande) {
+  if (req.user.role === 'ADMIN') return lieuIdDemande;
+  return req.user.lieuId || undefined;
+}
+
 // GET /api/etats/marge-produits?dateDebut=&dateFin=
 async function margeParProduit(req, res) {
   const { dateDebut, dateFin } = req.query;
@@ -111,8 +118,9 @@ async function recapBoutique(req, res) {
 
 // GET /api/etats/meilleur-vendeur?dateDebut=&dateFin=&lieuId=
 async function meilleurVendeur(req, res) {
-  const { dateDebut, dateFin: dateFinBrute, lieuId } = req.query;
+  const { dateDebut, dateFin: dateFinBrute, lieuId: lieuIdDemande } = req.query;
   const periode = restreindreAJourdhui(req, dateDebut, dateFinBrute);
+  const lieuId = restreindreLieu(req, lieuIdDemande);
 
   const where = { statut: 'VALIDEE', vendeurId: { not: null }, ...construirePeriode(periode.dateDebut, periode.dateFin) };
   if (lieuId) where.lieuId = Number(lieuId);
@@ -144,8 +152,9 @@ async function meilleurVendeur(req, res) {
 
 // GET /api/etats/par-date?dateDebut=&dateFin=&lieuId=
 async function parDate(req, res) {
-  const { dateDebut, dateFin: dateFinBrute, lieuId } = req.query;
+  const { dateDebut, dateFin: dateFinBrute, lieuId: lieuIdDemande } = req.query;
   const periode = restreindreAJourdhui(req, dateDebut, dateFinBrute);
+  const lieuId = restreindreLieu(req, lieuIdDemande);
   const where = { statut: 'VALIDEE', ...construirePeriode(periode.dateDebut, periode.dateFin) };
   if (lieuId) where.lieuId = Number(lieuId);
 
@@ -166,8 +175,9 @@ async function parDate(req, res) {
 
 // GET /api/etats/par-mode-paiement?dateDebut=&dateFin=&lieuId=
 async function parModePaiement(req, res) {
-  const { dateDebut, dateFin: dateFinBrute, lieuId } = req.query;
+  const { dateDebut, dateFin: dateFinBrute, lieuId: lieuIdDemande } = req.query;
   const periode = restreindreAJourdhui(req, dateDebut, dateFinBrute);
+  const lieuId = restreindreLieu(req, lieuIdDemande);
   const whereVente = { statut: 'VALIDEE', ...construirePeriode(periode.dateDebut, periode.dateFin) };
   if (lieuId) whereVente.lieuId = Number(lieuId);
 
@@ -198,8 +208,9 @@ async function parModePaiement(req, res) {
 
 // GET /api/etats/par-type?dateDebut=&dateFin=&lieuId=
 async function parType(req, res) {
-  const { dateDebut, dateFin: dateFinBrute, lieuId } = req.query;
+  const { dateDebut, dateFin: dateFinBrute, lieuId: lieuIdDemande } = req.query;
   const periode = restreindreAJourdhui(req, dateDebut, dateFinBrute);
+  const lieuId = restreindreLieu(req, lieuIdDemande);
   const where = { statut: 'VALIDEE', ...construirePeriode(periode.dateDebut, periode.dateFin) };
   if (lieuId) where.lieuId = Number(lieuId);
 
@@ -219,11 +230,15 @@ async function parType(req, res) {
 // Photo de la journée : encaissements (ventes du jour + règlements crédit reçus le jour même),
 // dépenses du jour, résultat net, et mouvement des avoirs (émis / utilisés) — sans retour d'espèces.
 async function fermetureCaisse(req, res) {
-  const { date, lieuId } = req.query;
+  const { date, lieuId: lieuIdDemande } = req.query;
   const dateEffective = req.user.role === 'ADMIN' ? date : null;
   const jour = dateEffective ? new Date(dateEffective) : new Date();
   const debut = debutJournee(jour);
   const fin = finJournee(jour);
+
+  // Un compte non-admin ne peut jamais consulter une autre boutique que la sienne,
+  // quel que soit ce qui est envoyé côté client — imposé ici, pas juste caché à l'écran.
+  const lieuId = req.user.role === 'ADMIN' ? lieuIdDemande : req.user.lieuId;
 
   const whereVente = { statut: 'VALIDEE', createdAt: { gte: debut, lte: fin } };
   if (lieuId) whereVente.lieuId = Number(lieuId);
