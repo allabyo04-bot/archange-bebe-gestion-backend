@@ -248,14 +248,19 @@ function construireHtmlEtiquettes(contenu) {
     width: 40mm; height: 25mm; padding: 1mm 1.5mm;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     text-align: center; overflow: hidden;
+    page-break-inside: avoid; break-inside: avoid;
   }
   .etiquette:not(:last-child) { page-break-after: always; break-after: page; }
-  .marque { width: 100%; font-size: 5.5px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
-  .designation { width: 100%; font-size: 7.5px; font-weight: bold; line-height: 1.15; margin-top: 0.5mm; max-height: 6mm; overflow: hidden; word-wrap: break-word; }
-  .prix { width: 100%; font-size: 8.5px; font-weight: bold; margin-top: 0.5mm; }
-  .etiquette svg { width: 34mm; height: 6mm; margin-top: 0.5mm; }
-  .code { font-size: 5.5px; letter-spacing: 0.3px; margin-top: 0.2mm; }
-  .reference { font-size: 6.5px; font-weight: bold; letter-spacing: 0.3px; margin-top: 0.3mm; font-family: 'Courier New', monospace; }
+  .marque { width: 100%; font-size: 5px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
+  .designation {
+    width: 100%; font-size: 7px; font-weight: bold; line-height: 1.1; margin-top: 0.4mm;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; word-wrap: break-word;
+  }
+  .prix { width: 100%; font-size: 8px; font-weight: bold; margin-top: 0.4mm; }
+  .etiquette svg { width: 32mm; height: 5mm; margin-top: 0.4mm; }
+  .code { font-size: 5px; letter-spacing: 0.3px; margin-top: 0.2mm; }
+  .reference { font-size: 6px; font-weight: bold; letter-spacing: 0.3px; margin-top: 0.2mm; font-family: 'Courier New', monospace; }
 </style>
 </head>
 <body>
