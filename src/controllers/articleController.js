@@ -295,6 +295,39 @@ async function uploaderPhoto(req, res) {
   }
 }
 
+// PUT /api/articles/deplacer-groupe   { articleIds: [1,2,3], sousFamilleId }
+// Déplace plusieurs articles d'un coup vers une autre sous-famille (et sa famille,
+// automatiquement) — pour corriger un mauvais classement sans rouvrir chaque article.
+async function deplacerGroupe(req, res) {
+  const { articleIds, sousFamilleId } = req.body;
+  if (!Array.isArray(articleIds) || articleIds.length === 0 || !sousFamilleId) {
+    return res.status(400).json({ error: 'articleIds (au moins un) et sousFamilleId sont requis.' });
+  }
+
+  const sousFamille = await prisma.sousFamille.findUnique({ where: { id: Number(sousFamilleId) } });
+  if (!sousFamille) return res.status(404).json({ error: 'Sous-famille introuvable.' });
+
+  const resultat = await prisma.article.updateMany({
+    where: { id: { in: articleIds.map(Number) } },
+    data: { sousFamilleId: sousFamille.id, familleId: sousFamille.familleId },
+  });
+
+  res.json({ deplaces: resultat.count });
+}
+
+// GET /api/articles/:id/stock
+// Stock de cet article, réparti par lieu (boutiques + entrepôts), pour l'afficher
+// sans changer de page (ex: directement dans la fiche de modification).
+async function stockParDepot(req, res) {
+  const id = Number(req.params.id);
+  const stocks = await prisma.stockEmplacement.findMany({
+    where: { articleId: id },
+    include: { lieu: true },
+    orderBy: { lieu: { nom: 'asc' } },
+  });
+  res.json(stocks.map((s) => ({ lieuId: s.lieuId, lieuNom: s.lieu.nom, quantite: s.quantite })));
+}
+
 module.exports = {
   listerArticles,
   rechercherArticle,
@@ -304,4 +337,6 @@ module.exports = {
   listerCodesAImprimer,
   imprimerEtiquettes,
   uploaderPhoto,
+  deplacerGroupe,
+  stockParDepot,
 };
