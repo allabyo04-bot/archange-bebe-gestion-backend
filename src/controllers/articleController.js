@@ -215,7 +215,7 @@ async function imprimerEtiquettes(req, res) {
       blocsEtiquettes.push(`
         <div class="etiquette">
           <div class="marque">Archange Bébé</div>
-          <div class="designation">${tronquer(article.designation, 20)}</div>
+          <div class="designation">${tronquer(article.designation, 17)}</div>
           <div class="prix">${Number(article.prixVente).toLocaleString('fr-FR')} F</div>
           ${article.codeBarre ? genererSvgEAN13(article.codeBarre) : ''}
           ${article.codeBarre ? `<div class="code">${article.codeBarre}</div>` : ''}
@@ -252,15 +252,15 @@ function construireHtmlEtiquettes(contenu) {
     page-break-inside: avoid; break-inside: avoid;
   }
   .etiquette:not(:last-child) { page-break-after: always; break-after: page; }
-  .marque { width: 100%; font-size: 6px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
+  .marque { width: 100%; font-size: 7px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
   .designation {
-    width: 100%; font-size: 9px; font-weight: bold; margin-top: 0.5mm;
+    width: 100%; font-size: 10.5px; font-weight: bold; margin-top: 0.6mm;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .prix { width: 100%; font-size: 10.5px; font-weight: bold; margin-top: 0.5mm; }
-  .etiquette svg { width: 33mm; height: 6.5mm; margin-top: 0.5mm; }
-  .code { font-size: 7px; letter-spacing: 0.3px; margin-top: 0.3mm; }
-  .reference { font-size: 8.5px; font-weight: bold; letter-spacing: 0.4px; margin-top: 0.3mm; font-family: 'Courier New', monospace; }
+  .prix { width: 100%; font-size: 12px; font-weight: bold; margin-top: 0.6mm; }
+  .etiquette svg { width: 35mm; height: 8mm; margin-top: 0.6mm; }
+  .code { font-size: 8px; letter-spacing: 0.3px; margin-top: 0.3mm; }
+  .reference { font-size: 9.5px; font-weight: bold; letter-spacing: 0.4px; margin-top: 0.4mm; font-family: 'Courier New', monospace; }
 </style>
 </head>
 <body>
