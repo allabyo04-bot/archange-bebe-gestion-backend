@@ -206,6 +206,7 @@ async function imprimerEtiquettes(req, res) {
 
   const blocsEtiquettes = [];
   const articlesIgnores = [];
+  const tronquer = (texte, max) => (texte.length > max ? `${texte.slice(0, max - 1).trimEnd()}…` : texte);
   for (const ligne of lignes) {
     const article = parId[Number(ligne.articleId)];
     if (!article) continue;
@@ -214,7 +215,7 @@ async function imprimerEtiquettes(req, res) {
       blocsEtiquettes.push(`
         <div class="etiquette">
           <div class="marque">Archange Bébé</div>
-          <div class="designation">${article.designation}</div>
+          <div class="designation">${tronquer(article.designation, 24)}</div>
           <div class="prix">${Number(article.prixVente).toLocaleString('fr-FR')} F</div>
           ${article.codeBarre ? genererSvgEAN13(article.codeBarre) : ''}
           ${article.codeBarre ? `<div class="code">${article.codeBarre}</div>` : ''}
@@ -253,9 +254,8 @@ function construireHtmlEtiquettes(contenu) {
   .etiquette:not(:last-child) { page-break-after: always; break-after: page; }
   .marque { width: 100%; font-size: 5px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
   .designation {
-    width: 100%; font-size: 7px; font-weight: bold; line-height: 1.1; margin-top: 0.4mm;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-    overflow: hidden; word-wrap: break-word;
+    width: 100%; font-size: 7.5px; font-weight: bold; margin-top: 0.5mm;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .prix { width: 100%; font-size: 8px; font-weight: bold; margin-top: 0.4mm; }
   .etiquette svg { width: 32mm; height: 5mm; margin-top: 0.4mm; }
