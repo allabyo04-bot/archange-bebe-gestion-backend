@@ -214,8 +214,7 @@ async function imprimerEtiquettes(req, res) {
     for (let i = 0; i < quantite; i++) {
       blocsEtiquettes.push(`
         <div class="etiquette">
-          <div class="marque">Archange Bébé</div>
-          <div class="designation">${tronquer(article.designation, 18)}</div>
+          <div class="designation">${tronquer(article.designation, 20)}</div>
           <div class="prix">${Number(article.prixVente).toLocaleString('fr-FR')} F</div>
           ${article.codeBarre ? genererSvgEAN13(article.codeBarre) : ''}
           ${article.codeBarre ? `<div class="code">${article.codeBarre}</div>` : ''}
@@ -252,9 +251,8 @@ function construireHtmlEtiquettes(contenu) {
     page-break-inside: avoid; break-inside: avoid;
   }
   .etiquette:not(:last-child) { page-break-after: always; break-after: page; }
-  .marque { width: 100%; font-size: 7.5px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
   .designation {
-    width: 100%; font-size: 12px; font-weight: bold; margin-top: 0.6mm;
+    width: 100%; font-size: 13px; font-weight: bold; margin-top: 0.6mm;
     white-space: nowrap; overflow: hidden; text-overflow: clip;
   }
   .prix { width: 100%; font-size: 13.5px; font-weight: bold; margin-top: 0.6mm; }
