@@ -215,7 +215,7 @@ async function imprimerEtiquettes(req, res) {
       blocsEtiquettes.push(`
         <div class="etiquette">
           <div class="marque">Archange Bébé</div>
-          <div class="designation">${tronquer(article.designation, 17)}</div>
+          <div class="designation">${tronquer(article.designation, 15)}</div>
           <div class="prix">${Number(article.prixVente).toLocaleString('fr-FR')} F</div>
           ${article.codeBarre ? genererSvgEAN13(article.codeBarre) : ''}
           ${article.codeBarre ? `<div class="code">${article.codeBarre}</div>` : ''}
@@ -246,21 +246,21 @@ function construireHtmlEtiquettes(contenu) {
   * { box-sizing: border-box; }
   body { font-family: Arial, sans-serif; margin: 0; }
   .etiquette {
-    width: 40mm; height: 25mm; padding: 1mm 1.5mm;
+    width: 40mm; height: 25mm; padding: 0.8mm 0.8mm;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     text-align: center; overflow: hidden;
     page-break-inside: avoid; break-inside: avoid;
   }
   .etiquette:not(:last-child) { page-break-after: always; break-after: page; }
-  .marque { width: 100%; font-size: 7px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
+  .marque { width: 100%; font-size: 7.5px; font-weight: bold; letter-spacing: 0.3px; color: #2E4E9E; text-transform: uppercase; line-height: 1.1; }
   .designation {
-    width: 100%; font-size: 10.5px; font-weight: bold; margin-top: 0.6mm;
+    width: 100%; font-size: 12px; font-weight: bold; margin-top: 0.6mm;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .prix { width: 100%; font-size: 12px; font-weight: bold; margin-top: 0.6mm; }
-  .etiquette svg { width: 35mm; height: 8mm; margin-top: 0.6mm; }
-  .code { font-size: 8px; letter-spacing: 0.3px; margin-top: 0.3mm; }
-  .reference { font-size: 9.5px; font-weight: bold; letter-spacing: 0.4px; margin-top: 0.4mm; font-family: 'Courier New', monospace; }
+  .prix { width: 100%; font-size: 13.5px; font-weight: bold; margin-top: 0.6mm; }
+  .etiquette svg { width: 38mm; height: 9mm; margin-top: 0.6mm; }
+  .code { font-size: 9px; letter-spacing: 0.3px; margin-top: 0.3mm; }
+  .reference { font-size: 10.5px; font-weight: bold; letter-spacing: 0.4px; margin-top: 0.4mm; font-family: 'Courier New', monospace; }
 </style>
 </head>
 <body>
