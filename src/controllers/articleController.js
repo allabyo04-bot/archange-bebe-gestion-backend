@@ -15,7 +15,7 @@ async function listerArticles(req, res) {
 
   const articles = await prisma.article.findMany({
     where,
-    include: { famille: true, sousFamille: true },
+    include: { famille: true, sousFamille: true, photos: { orderBy: { ordre: 'asc' } } },
     orderBy: { designation: 'asc' },
   });
   res.json(articles);
@@ -37,12 +37,13 @@ async function rechercherArticle(req, res) {
     return articles.map((a) => ({ ...a, stockLieu: parArticle[a.id] ?? 0 }));
   }
 
-  let article = await prisma.article.findFirst({ where: { codeBarre: q, actif: true } });
+  const inclurePhotos = { photos: { orderBy: { ordre: 'asc' } } };
+  let article = await prisma.article.findFirst({ where: { codeBarre: q, actif: true }, include: inclurePhotos });
   if (!article) {
-    article = await prisma.article.findFirst({ where: { codeInterne: q, actif: true } });
+    article = await prisma.article.findFirst({ where: { codeInterne: q, actif: true }, include: inclurePhotos });
   }
   if (!article) {
-    article = await prisma.article.findFirst({ where: { reference: { equals: q, mode: 'insensitive' }, actif: true } });
+    article = await prisma.article.findFirst({ where: { reference: { equals: q, mode: 'insensitive' }, actif: true }, include: inclurePhotos });
   }
   if (article) {
     const [resultat] = await ajouterStockLieu([article]);
@@ -270,6 +271,8 @@ function construireHtmlEtiquettes(contenu) {
 }
 
 // POST /api/articles/:id/photo
+// Ajoute une photo à la galerie de l'article (n'écrase plus les photos existantes).
+// La toute première photo ajoutée devient automatiquement la photo principale.
 async function uploaderPhoto(req, res) {
   const id = Number(req.params.id);
   const article = await prisma.article.findUnique({ where: { id } });
@@ -288,15 +291,91 @@ async function uploaderPhoto(req, res) {
       stream.end(req.file.buffer);
     });
 
+    const nombrePhotosExistantes = await prisma.photoArticle.count({ where: { articleId: id } });
+    const estPremierePhoto = nombrePhotosExistantes === 0;
+
+    await prisma.photoArticle.create({
+      data: {
+        articleId: id,
+        url: resultat.secure_url,
+        ordre: nombrePhotosExistantes,
+        estPrincipale: estPremierePhoto,
+      },
+    });
+
+    // Article.photoUrl reste synchronisé sur la photo principale (compatibilité
+    // avec les écrans/le site qui lisent encore ce champ directement).
     const misAJour = await prisma.article.update({
       where: { id },
-      data: { photoUrl: resultat.secure_url },
+      data: estPremierePhoto ? { photoUrl: resultat.secure_url } : {},
+      include: { photos: { orderBy: { ordre: 'asc' } } },
     });
 
     res.json(misAJour);
   } catch (err) {
     res.status(500).json({ error: "Échec de l'upload de la photo." });
   }
+}
+
+// DELETE /api/articles/:id/photos/:photoId
+// Supprime une photo de la galerie. Si c'était la photo principale, la photo
+// suivante (par ordre) est promue automatiquement — sinon photoUrl repasse à null.
+async function supprimerPhoto(req, res) {
+  const id = Number(req.params.id);
+  const photoId = Number(req.params.photoId);
+
+  const photo = await prisma.photoArticle.findUnique({ where: { id: photoId } });
+  if (!photo || photo.articleId !== id) {
+    return res.status(404).json({ error: 'Photo introuvable pour cet article.' });
+  }
+
+  await prisma.photoArticle.delete({ where: { id: photoId } });
+
+  let article;
+  if (photo.estPrincipale) {
+    const suivante = await prisma.photoArticle.findFirst({
+      where: { articleId: id },
+      orderBy: { ordre: 'asc' },
+    });
+    if (suivante) {
+      await prisma.photoArticle.update({ where: { id: suivante.id }, data: { estPrincipale: true } });
+    }
+    article = await prisma.article.update({
+      where: { id },
+      data: { photoUrl: suivante ? suivante.url : null },
+      include: { photos: { orderBy: { ordre: 'asc' } } },
+    });
+  } else {
+    article = await prisma.article.findUnique({
+      where: { id },
+      include: { photos: { orderBy: { ordre: 'asc' } } },
+    });
+  }
+
+  res.json(article);
+}
+
+// PUT /api/articles/:id/photos/:photoId/principale
+// Définit une photo existante comme photo principale (vignette listes + catalogue).
+async function definirPhotoPrincipale(req, res) {
+  const id = Number(req.params.id);
+  const photoId = Number(req.params.photoId);
+
+  const photo = await prisma.photoArticle.findUnique({ where: { id: photoId } });
+  if (!photo || photo.articleId !== id) {
+    return res.status(404).json({ error: 'Photo introuvable pour cet article.' });
+  }
+
+  await prisma.photoArticle.updateMany({ where: { articleId: id }, data: { estPrincipale: false } });
+  await prisma.photoArticle.update({ where: { id: photoId }, data: { estPrincipale: true } });
+
+  const article = await prisma.article.update({
+    where: { id },
+    data: { photoUrl: photo.url },
+    include: { photos: { orderBy: { ordre: 'asc' } } },
+  });
+
+  res.json(article);
 }
 
 // PUT /api/articles/deplacer-groupe   { articleIds: [1,2,3], sousFamilleId }
@@ -341,6 +420,8 @@ module.exports = {
   listerCodesAImprimer,
   imprimerEtiquettes,
   uploaderPhoto,
+  supprimerPhoto,
+  definirPhotoPrincipale,
   deplacerGroupe,
   stockParDepot,
 };

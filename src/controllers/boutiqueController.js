@@ -55,7 +55,7 @@ async function obtenirProduit(req, res) {
   const id = Number(req.params.id);
   const article = await prisma.article.findUnique({
     where: { id },
-    include: { famille: true, sousFamille: true },
+    include: { famille: true, sousFamille: true, photos: { orderBy: { ordre: 'asc' } } },
   });
   if (!article || !article.actif) return res.status(404).json({ error: 'Produit introuvable.' });
   res.json({ ...article, enStock: article.stockActuel > 0 });
