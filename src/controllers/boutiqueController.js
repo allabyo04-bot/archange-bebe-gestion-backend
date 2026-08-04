@@ -58,7 +58,8 @@ async function obtenirProduit(req, res) {
     include: { famille: true, sousFamille: true, photos: { orderBy: { ordre: 'asc' } } },
   });
   if (!article || !article.actif) return res.status(404).json({ error: 'Produit introuvable.' });
-  res.json({ ...article, enStock: article.stockActuel > 0 });
+  const description = article.description || article.sousFamille?.description || null;
+  res.json({ ...article, enStock: article.stockActuel > 0, description });
 }
 
 // GET /api/boutique/familles — pour construire le menu de navigation du site

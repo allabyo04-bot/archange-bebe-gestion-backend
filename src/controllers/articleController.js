@@ -69,7 +69,7 @@ async function rechercherArticle(req, res) {
 async function creerArticle(req, res) {
   const {
     codeBarre, codeInterne, designation,
-    familleId, sousFamilleId, prixAchat, prixVente, seuilAlerte,
+    familleId, sousFamilleId, prixAchat, prixVente, seuilAlerte, description,
   } = req.body;
 
   if (!designation || !familleId || !sousFamilleId || prixVente === undefined) {
@@ -100,6 +100,7 @@ async function creerArticle(req, res) {
           prixAchat: prixAchat || 0,
           prixVente,
           seuilAlerte: seuilAlerte ?? 5,
+          description: description && description.trim() ? description.trim() : null,
         },
       });
     });
@@ -115,7 +116,7 @@ async function modifierArticle(req, res) {
   const id = Number(req.params.id);
   const {
     designation, familleId, sousFamilleId,
-    prixAchat, prixVente, prixPromo, seuilAlerte, actif,
+    prixAchat, prixVente, prixPromo, seuilAlerte, actif, description,
   } = req.body;
 
   const article = await prisma.article.findUnique({ where: { id } });
@@ -138,6 +139,7 @@ async function modifierArticle(req, res) {
       prixPromo: prixPromo !== undefined ? (prixPromo === '' || prixPromo === null ? null : prixPromo) : article.prixPromo,
       seuilAlerte: seuilAlerte ?? article.seuilAlerte,
       actif: actif !== undefined ? actif : article.actif,
+      description: description !== undefined ? (description.trim() === '' ? null : description.trim()) : article.description,
     },
   });
 

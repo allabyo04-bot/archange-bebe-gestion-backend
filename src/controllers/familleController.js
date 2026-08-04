@@ -61,13 +61,15 @@ async function modifierFamille(req, res) {
   }
 }
 
-// PUT /api/familles/:familleId/sous-familles/:id  { nom, codePrefixe, dernierNumero }
+// PUT /api/familles/:familleId/sous-familles/:id  { nom, codePrefixe, dernierNumero, description }
 // Modifie une sous-famille existante. Changer le préfixe ou le dernier numéro ne
 // touche pas la référence des articles déjà créés — cela influence seulement le
 // prochain code généré pour un futur article de cette sous-famille.
+// La description sert de repli sur le site pour tout article de cette sous-famille
+// qui n'a pas sa propre description.
 async function modifierSousFamille(req, res) {
   const id = Number(req.params.id);
-  const { nom, codePrefixe, dernierNumero } = req.body;
+  const { nom, codePrefixe, dernierNumero, description } = req.body;
   const data = {};
   if (nom !== undefined) {
     if (!nom.trim()) return res.status(400).json({ error: 'Le nom ne peut pas être vide.' });
@@ -81,6 +83,9 @@ async function modifierSousFamille(req, res) {
     const n = Number(dernierNumero);
     if (Number.isNaN(n) || n < 0) return res.status(400).json({ error: 'Le dernier numéro doit être un nombre positif.' });
     data.dernierNumero = n;
+  }
+  if (description !== undefined) {
+    data.description = description.trim() === '' ? null : description.trim();
   }
   try {
     const sousFamille = await prisma.sousFamille.update({ where: { id }, data });

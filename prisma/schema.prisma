@@ -108,6 +108,7 @@ model SousFamille {
   nom            String
   codePrefixe    String   @unique
   dernierNumero  Int      @default(0)
+  description    String?
   familleId      Int
   famille        Famille  @relation(fields: [familleId], references: [id])
   actif          Boolean  @default(true)
@@ -129,6 +130,7 @@ model Article {
   codeInterne     String?      @unique
   designation     String
   photoUrl        String?
+  description     String?
   familleId       Int?
   famille         Famille?     @relation(fields: [familleId], references: [id])
   sousFamilleId   Int?
