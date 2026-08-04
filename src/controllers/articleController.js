@@ -114,7 +114,7 @@ async function modifierArticle(req, res) {
   const id = Number(req.params.id);
   const {
     designation, familleId, sousFamilleId,
-    prixAchat, prixVente, seuilAlerte, actif,
+    prixAchat, prixVente, prixPromo, seuilAlerte, actif,
   } = req.body;
 
   const article = await prisma.article.findUnique({ where: { id } });
@@ -134,6 +134,7 @@ async function modifierArticle(req, res) {
       sousFamilleId: Number(sousFamilleId),
       prixAchat: nouveauPrixAchat,
       prixVente,
+      prixPromo: prixPromo !== undefined ? (prixPromo === '' || prixPromo === null ? null : prixPromo) : article.prixPromo,
       seuilAlerte: seuilAlerte ?? article.seuilAlerte,
       actif: actif !== undefined ? actif : article.actif,
     },

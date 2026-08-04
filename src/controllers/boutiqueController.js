@@ -10,9 +10,9 @@ function genererNumeroCommande() {
 // CATALOGUE (public, sans authentification)
 // ------------------------------------------------------------
 
-// GET /api/boutique/produits?q=&familleId=&sousFamilleId=&page=
+// GET /api/boutique/produits?q=&familleId=&sousFamilleId=&enPromo=&page=
 async function listerProduits(req, res) {
-  const { q, familleId, sousFamilleId } = req.query;
+  const { q, familleId, sousFamilleId, enPromo } = req.query;
   const page = Math.max(1, Number(req.query.page) || 1);
   const parPage = 24;
 
@@ -25,6 +25,7 @@ async function listerProduits(req, res) {
   }
   if (familleId) where.familleId = Number(familleId);
   if (sousFamilleId) where.sousFamilleId = Number(sousFamilleId);
+  if (enPromo === 'true') where.prixPromo = { not: null };
 
   const [total, articles] = await Promise.all([
     prisma.article.count({ where }),
@@ -34,7 +35,7 @@ async function listerProduits(req, res) {
       skip: (page - 1) * parPage,
       take: parPage,
       select: {
-        id: true, designation: true, reference: true, prixVente: true,
+        id: true, designation: true, reference: true, prixVente: true, prixPromo: true,
         photoUrl: true, stockActuel: true, familleId: true, sousFamilleId: true,
       },
     }),
@@ -211,7 +212,7 @@ async function creerCommande(req, res) {
       articleId: article.id,
       designation: article.designation,
       quantite,
-      prixUnitaire: article.prixVente,
+      prixUnitaire: article.prixPromo ?? article.prixVente,
     });
   }
 
