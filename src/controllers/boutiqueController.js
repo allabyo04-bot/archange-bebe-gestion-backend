@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
+const { appliquerMouvementStock } = require('../lib/stock');
 
 function genererNumeroCommande() {
   return `CMD-${Date.now()}`;
@@ -255,19 +256,72 @@ async function listerCommandesAdmin(req, res) {
   res.json(commandes);
 }
 
-// PUT /api/boutique/admin/commandes/:id   { statut }
+// PUT /api/boutique/admin/commandes/:id   { statut, lieuSortieId? }
+// lieuSortieId n'est nécessaire que pour une commande en livraison (pas de retrait
+// boutique connu) qu'on confirme pour la première fois — sinon ignoré.
 const STATUTS_VALIDES = ['EN_ATTENTE', 'CONFIRMEE', 'PRETE', 'LIVREE', 'ANNULEE'];
+const STATUTS_ACTIFS = ['CONFIRMEE', 'PRETE', 'LIVREE']; // déclenchent la sortie de stock, une seule fois
+
 async function modifierStatutCommande(req, res) {
   const id = Number(req.params.id);
-  const { statut } = req.body;
+  const { statut, lieuSortieId } = req.body;
   if (!STATUTS_VALIDES.includes(statut)) {
     return res.status(400).json({ error: 'Statut invalide.' });
   }
+
+  const commande = await prisma.commandeEnLigne.findUnique({ where: { id }, include: { lignes: true } });
+  if (!commande) return res.status(404).json({ error: 'Commande introuvable.' });
+
   try {
-    const commande = await prisma.commandeEnLigne.update({ where: { id }, data: { statut } });
-    res.json(commande);
-  } catch {
-    res.status(404).json({ error: 'Commande introuvable.' });
+    // Première bascule vers un statut actif : on sort le stock, une seule fois.
+    if (STATUTS_ACTIFS.includes(statut) && !commande.stockDecompte) {
+      const lieuSortie = commande.lieuRetraitId || (lieuSortieId ? Number(lieuSortieId) : null);
+      if (!lieuSortie) {
+        return res.status(400).json({
+          error: "Cette commande est en livraison — précise depuis quelle boutique/entrepôt sortir le stock (lieuSortieId).",
+        });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        for (const ligne of commande.lignes) {
+          await appliquerMouvementStock(tx, {
+            articleId: ligne.articleId,
+            lieuId: lieuSortie,
+            delta: -ligne.quantite,
+            type: 'SORTIE_SITE',
+            utilisateurId: req.user.id,
+            notes: `Commande en ligne ${commande.numero}`,
+          });
+        }
+        await tx.commandeEnLigne.update({
+          where: { id },
+          data: { statut, stockDecompte: true, lieuSortieId: lieuSortie },
+        });
+      });
+    } else if (statut === 'ANNULEE' && commande.stockDecompte && commande.lieuSortieId) {
+      // On annule après que le stock ait déjà été sorti : on le remet exactement
+      // là où il avait été prélevé.
+      await prisma.$transaction(async (tx) => {
+        for (const ligne of commande.lignes) {
+          await appliquerMouvementStock(tx, {
+            articleId: ligne.articleId,
+            lieuId: commande.lieuSortieId,
+            delta: ligne.quantite,
+            type: 'ANNULATION_SORTIE_SITE',
+            utilisateurId: req.user.id,
+            notes: `Annulation commande en ligne ${commande.numero}`,
+          });
+        }
+        await tx.commandeEnLigne.update({ where: { id }, data: { statut, stockDecompte: false } });
+      });
+    } else {
+      await prisma.commandeEnLigne.update({ where: { id }, data: { statut } });
+    }
+
+    const commandeMiseAJour = await prisma.commandeEnLigne.findUnique({ where: { id } });
+    res.json(commandeMiseAJour);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 }
 
