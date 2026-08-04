@@ -45,14 +45,31 @@ async function modifierLieu(req, res) {
 }
 
 // GET /api/stock/lieux/:id/stock
+// GET /api/stock/lieux/:id/stock
+// Renvoie TOUS les articles actifs, y compris ceux qui n'ont jamais eu le moindre
+// mouvement dans ce lieu (quantité 0) — sans ça, un article jamais réceptionné ici
+// restait invisible sur cet écran au lieu d'apparaître clairement à 0.
 async function stockParLieu(req, res) {
   const lieuId = Number(req.params.id);
-  const stocks = await prisma.stockEmplacement.findMany({
-    where: { lieuId },
-    include: { article: true },
-    orderBy: { article: { designation: 'asc' } },
+  const [articles, stocksExistants] = await Promise.all([
+    prisma.article.findMany({ where: { actif: true }, orderBy: { designation: 'asc' } }),
+    prisma.stockEmplacement.findMany({ where: { lieuId } }),
+  ]);
+
+  const quantiteParArticle = Object.fromEntries(stocksExistants.map((s) => [s.articleId, s]));
+
+  const resultat = articles.map((article) => {
+    const existant = quantiteParArticle[article.id];
+    return {
+      id: existant ? existant.id : `virtuel-${article.id}`,
+      articleId: article.id,
+      lieuId,
+      quantite: existant ? existant.quantite : 0,
+      article,
+    };
   });
-  res.json(stocks);
+
+  res.json(resultat);
 }
 
 module.exports = { listerLieux, creerLieu, modifierLieu, stockParLieu };
