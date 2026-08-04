@@ -22,6 +22,7 @@ const utilisateurRoutes = require('./routes/utilisateurRoutes');
 const fideliteRoutes = require('./routes/fideliteRoutes');
 const journalRoutes = require('./routes/journalRoutes');
 const roleRoutes = require('./routes/roleRoutes');
+const boutiqueRoutes = require('./routes/boutiqueRoutes');
 const venteEnAttenteRoutes = require('./routes/venteEnAttenteRoutes');
 
 const app = express();
@@ -51,6 +52,7 @@ app.use('/api/utilisateurs', utilisateurRoutes);
 app.use('/api/fidelite', fideliteRoutes);
 app.use('/api/journal', journalRoutes);
 app.use('/api/roles', roleRoutes);
+app.use('/api/boutique', boutiqueRoutes);
 
 // Gestionnaire d'erreurs générique
 app.use((err, req, res, next) => {

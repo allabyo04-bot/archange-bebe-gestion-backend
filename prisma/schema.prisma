@@ -281,6 +281,9 @@ model Client {
   nomComplet    String
   telephone     String?  @unique
   email         String?
+  // Renseigné uniquement si le client a créé un compte sur le site e-commerce
+  // (reste vide pour les clients enregistrés côté caisse ou en commande invité).
+  motDePasse    String?
   pointsFidelite Int     @default(0)
   estComptoir   Boolean  @default(false)
 
@@ -417,6 +420,40 @@ model VenteEnAttente {
   utilisateurId Int
   donnees       Json     // panier, remisePourcent, motifRemise, vendeurId, clientId, typeVente
   createdAt     DateTime @default(now())
+}
+
+// Commande passée depuis le site e-commerce — invité ou compte client. Reste
+// distincte d'une Vente tant qu'elle n'est pas traitée côté caisse ; elle ne
+// touche jamais le stock toute seule (le stock ne bouge qu'à la préparation
+// réelle, gérée par l'équipe, pas au clic du client).
+model CommandeEnLigne {
+  id                Int      @id @default(autoincrement())
+  numero            String   @unique
+  clientId          Int?
+  nomClient         String
+  telephoneClient   String
+  emailClient       String?
+  modeLivraison     String   // 'RETRAIT' | 'LIVRAISON'
+  lieuRetraitId     Int?
+  adresseLivraison  String?
+  villeLivraison    String?
+  statut            String   @default("EN_ATTENTE") // EN_ATTENTE, CONFIRMEE, PRETE, LIVREE, ANNULEE
+  totalCommande     Decimal
+  modePaiement      String   @default("A_LA_LIVRAISON") // A_LA_LIVRAISON, JEKO (à venir)
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  lignes            LigneCommandeEnLigne[]
+}
+
+model LigneCommandeEnLigne {
+  id           Int             @id @default(autoincrement())
+  commandeId   Int
+  commande     CommandeEnLigne @relation(fields: [commandeId], references: [id])
+  articleId    Int
+  designation  String
+  quantite     Int
+  prixUnitaire Decimal
 }
 
 model DemandeRemise {
