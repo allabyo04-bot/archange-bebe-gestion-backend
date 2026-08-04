@@ -109,6 +109,29 @@ async function obtenirDashboard(req, res) {
     };
   }));
 
+  // Ventes en ligne — uniquement les commandes "Livrées" comptent comme un vrai
+  // chiffre d'affaires (une commande en attente peut encore être annulée). Affiché
+  // séparément du CA boutique, jamais fusionné, pour ne pas fausser les chiffres
+  // avec des commandes pas encore honorées. Réservé aux admins (le site n'est pas
+  // rattaché à une boutique précise).
+  let ventesEnLigne = null;
+  if (!lieuFiltre) {
+    const [commandesJour, commandesMois] = await Promise.all([
+      prisma.commandeEnLigne.findMany({
+        where: { statut: 'LIVREE', createdAt: { gte: debutJour } },
+        select: { totalCommande: true },
+      }),
+      prisma.commandeEnLigne.findMany({
+        where: { statut: 'LIVREE', createdAt: { gte: debutMois } },
+        select: { totalCommande: true },
+      }),
+    ]);
+    ventesEnLigne = {
+      jour: { nombre: commandesJour.length, total: commandesJour.reduce((s, c) => s + Number(c.totalCommande), 0) },
+      mois: { nombre: commandesMois.length, total: commandesMois.reduce((s, c) => s + Number(c.totalCommande), 0) },
+    };
+  }
+
   res.json({
     date: new Date().toISOString().slice(0, 10),
     ventes: { nombre: ventesDuJour.length, total: totalVentes },
@@ -130,6 +153,7 @@ async function obtenirDashboard(req, res) {
       },
     },
     parBoutique,
+    ventesEnLigne,
   });
 }
 
