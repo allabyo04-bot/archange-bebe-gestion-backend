@@ -49,8 +49,12 @@ async function obtenirDashboard(req, res) {
     ]);
 
   // Prisma ne compare pas nativement deux colonnes entre elles (stockActuel <= seuilAlerte) ;
-  // on filtre donc côté JS pour rester fiable sur toutes les versions.
-  const tousArticles = await prisma.article.findMany({ where: { actif: true } });
+  // on filtre donc côté JS pour rester fiable sur toutes les versions — mais on ne
+  // charge que les colonnes utiles pour ne pas transporter tout l'article (~2500 lignes).
+  const tousArticles = await prisma.article.findMany({
+    where: { actif: true },
+    select: { id: true, designation: true, stockActuel: true, seuilAlerte: true },
+  });
   const articlesStockBas = tousArticles.filter((a) => a.stockActuel <= a.seuilAlerte);
 
   const totalVentes = ventesDuJour.reduce((s, v) => s + Number(v.totalNet), 0);
@@ -68,7 +72,7 @@ async function obtenirDashboard(req, res) {
   });
 
   const parBoutique = await Promise.all(boutiques.map(async (b) => {
-    const [lignesVenduesMois, depensesLieuMois, ventesLieuJour] = await Promise.all([
+    const [lignesVenduesMois, depensesLieuMois, ventesLieuMois] = await Promise.all([
       prisma.ligneVente.findMany({
         where: { vente: { lieuId: b.id, statut: 'VALIDEE', createdAt: { gte: debutMois } } },
         select: { quantite: true, article: { select: { prixAchat: true } } },
@@ -78,15 +82,13 @@ async function obtenirDashboard(req, res) {
         select: { montant: true },
       }),
       prisma.vente.findMany({
-        where: { lieuId: b.id, statut: 'VALIDEE', createdAt: { gte: debutJour } },
-        select: { totalNet: true },
+        where: { lieuId: b.id, statut: 'VALIDEE', createdAt: { gte: debutMois } },
+        select: { totalNet: true, createdAt: true },
       }),
     ]);
-
-    const ventesLieuMois = await prisma.vente.findMany({
-      where: { lieuId: b.id, statut: 'VALIDEE', createdAt: { gte: debutMois } },
-      select: { totalNet: true },
-    });
+    // Le jour est toujours inclus dans le mois — pas besoin d'une requête séparée,
+    // on filtre simplement ce qu'on a déjà en mémoire.
+    const ventesLieuJour = ventesLieuMois.filter((v) => new Date(v.createdAt) >= debutJour);
 
     const totalVentesLieu = ventesLieuMois.reduce((s, v) => s + Number(v.totalNet), 0);
     const coutMarchandise = lignesVenduesMois.reduce((s, l) => s + l.quantite * Number(l.article.prixAchat), 0);
