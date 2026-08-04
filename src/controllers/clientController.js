@@ -4,14 +4,18 @@ function estNomComptoir(nom) {
   return nom.trim().toLowerCase() === 'client comptoir';
 }
 
-// GET /api/clients?q=recherche
+// GET /api/clients?q=recherche&compteSite=true
 async function listerClients(req, res) {
-  const { q } = req.query;
+  const { q, compteSite } = req.query;
   const where = q
     ? { OR: [{ nomComplet: { contains: q, mode: 'insensitive' } }, { telephone: { contains: q } }] }
     : {};
+  if (compteSite === 'true') where.motDePasse = { not: null };
+
   const clients = await prisma.client.findMany({ where, orderBy: { nomComplet: 'asc' } });
-  res.json(clients);
+  // Le mot de passe (chiffré) ne doit jamais quitter le serveur — on ne renvoie que
+  // le fait d'en avoir un ou non.
+  res.json(clients.map(({ motDePasse, ...reste }) => ({ ...reste, compteSite: !!motDePasse })));
 }
 
 // POST /api/clients   { nomComplet, telephone?, email? }
@@ -44,7 +48,8 @@ async function obtenirClient(req, res) {
     },
   });
   if (!client) return res.status(404).json({ error: 'Client introuvable.' });
-  res.json(client);
+  const { motDePasse, ...clientSansMotDePasse } = client;
+  res.json({ ...clientSansMotDePasse, compteSite: !!motDePasse });
 }
 
 // PUT /api/clients/:id   { nomComplet?, telephone?, email? }
