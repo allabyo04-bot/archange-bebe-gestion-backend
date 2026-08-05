@@ -256,7 +256,6 @@ async function creerCommande(req, res) {
     const lien = await jeko.creerLienPaiement({
       titre: `Commande ${commande.numero} — Archange Bébé`,
       montantXof: total,
-      reference: commande.numero,
     });
     const commandeAvecLien = await prisma.commandeEnLigne.update({
       where: { id: commande.id },
@@ -265,6 +264,7 @@ async function creerCommande(req, res) {
     });
     res.status(201).json(commandeAvecLien);
   } catch (err) {
+    console.error(`Échec création lien JEKO pour commande ${commande.numero} :`, err.message);
     res.status(201).json({ ...commande, erreurPaiement: err.message });
   }
 }
