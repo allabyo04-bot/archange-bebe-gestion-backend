@@ -26,7 +26,10 @@ function headersAuth() {
 // Crée un lien de paiement à usage unique pour une commande.
 // montantXof : montant en francs CFA (entier) — JEKO attend des "centimes"
 // (montant × 100) même pour une devise sans sous-unité comme le XOF.
-async function creerLienPaiement({ titre, montantXof, reference }) {
+// Note : l'API "payment_links" ne prend PAS de champ "reference" personnalisé (contrairement
+// à l'API "payment_requests"/redirect) — le rapprochement avec la commande se fait via
+// l'identifiant du lien lui-même (transactionDetails.paymentLinkId dans le webhook).
+async function creerLienPaiement({ titre, montantXof }) {
   if (!estConfigure()) {
     throw new Error('Le paiement en ligne JEKO n\'est pas encore configuré.');
   }
@@ -40,13 +43,16 @@ async function creerLienPaiement({ titre, montantXof, reference }) {
       amountCents: Math.round(montantXof) * 100,
       currency: 'XOF',
       allowMultiplePayments: false,
-      reference,
     }),
   });
 
-  const data = await reponse.json().catch(() => ({}));
+  const texte = await reponse.text();
+  let data;
+  try { data = texte ? JSON.parse(texte) : {}; } catch { data = {}; }
+
   if (!reponse.ok) {
-    throw new Error(data.message || 'Échec de la création du lien de paiement JEKO.');
+    const detail = data.message || data.error || texte || `HTTP ${reponse.status}`;
+    throw new Error(`Échec de la création du lien de paiement JEKO (${reponse.status}) : ${detail}`);
   }
   return data; // { id, link, canReceivePayments, ... }
 }
