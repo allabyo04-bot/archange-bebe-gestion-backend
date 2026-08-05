@@ -462,7 +462,10 @@ model CommandeEnLigne {
   villeLivraison    String?
   statut            String   @default("EN_ATTENTE") // EN_ATTENTE, CONFIRMEE, PRETE, LIVREE, ANNULEE
   totalCommande     Decimal
-  modePaiement      String   @default("A_LA_LIVRAISON") // A_LA_LIVRAISON, JEKO (à venir)
+  modePaiement      String   @default("A_LA_LIVRAISON") // A_LA_LIVRAISON, JEKO
+  jekoPaymentLinkId String?
+  jekoPaymentUrl    String?
+  paiementRecu      Boolean  @default(false)
   notes             String?
   // Le stock n'est décompté qu'une seule fois, à la confirmation — jamais au clic
   // du client. lieuSortieId trace d'où il a été prélevé (utile en cas d'annulation

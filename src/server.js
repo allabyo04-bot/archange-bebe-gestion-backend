@@ -24,9 +24,16 @@ const journalRoutes = require('./routes/journalRoutes');
 const roleRoutes = require('./routes/roleRoutes');
 const boutiqueRoutes = require('./routes/boutiqueRoutes');
 const venteEnAttenteRoutes = require('./routes/venteEnAttenteRoutes');
+const webhookJekoRoutes = require('./routes/webhookJekoRoutes');
 
 const app = express();
 app.use(cors());
+
+// Le webhook JEKO doit être monté AVANT express.json() global, avec un corps brut
+// (Buffer), car la vérification de signature HMAC porte sur les octets exacts reçus —
+// un corps déjà parsé en JSON puis resérialisé ne redonnerait pas la même signature.
+app.use('/api/webhooks/jeko', express.raw({ type: 'application/json' }), webhookJekoRoutes);
+
 app.use(express.json());
 
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'Jesma U - Gestion Commerciale' }));

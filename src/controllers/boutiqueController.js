@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
+const jeko = require('../lib/jeko');
 const { appliquerMouvementStock } = require('../lib/stock');
 
 function genererNumeroCommande() {
@@ -175,7 +176,7 @@ async function mesCommandes(req, res) {
 async function creerCommande(req, res) {
   const {
     nomClient, telephoneClient, emailClient, modeLivraison,
-    lieuRetraitId, adresseLivraison, villeLivraison, notes, lignes,
+    lieuRetraitId, adresseLivraison, villeLivraison, notes, lignes, modePaiement,
   } = req.body;
 
   if (!Array.isArray(lignes) || lignes.length === 0) {
@@ -189,6 +190,10 @@ async function creerCommande(req, res) {
   }
   if (modeLivraison === 'LIVRAISON' && (!adresseLivraison || !villeLivraison)) {
     return res.status(400).json({ error: 'Adresse et ville de livraison requises.' });
+  }
+  const paiementEnLigne = modePaiement === 'JEKO';
+  if (paiementEnLigne && !jeko.estConfigure()) {
+    return res.status(400).json({ error: "Le paiement en ligne n'est pas disponible pour le moment. Choisis \"Paiement à la livraison\"." });
   }
 
   const nom = req.client ? req.client.nomComplet : nomClient;
@@ -233,12 +238,35 @@ async function creerCommande(req, res) {
       villeLivraison: modeLivraison === 'LIVRAISON' ? villeLivraison : null,
       notes: notes || null,
       totalCommande: total,
+      modePaiement: paiementEnLigne ? 'JEKO' : 'A_LA_LIVRAISON',
       lignes: { create: lignesValidees },
     },
     include: { lignes: true },
   });
 
-  res.status(201).json(commande);
+  if (!paiementEnLigne) {
+    return res.status(201).json(commande);
+  }
+
+  // Paiement en ligne demandé : on crée le lien JEKO et on le renvoie au site pour
+  // rediriger le client. La commande existe déjà (statut EN_ATTENTE, paiementRecu false)
+  // — si la création du lien échoue, la commande reste utilisable en "paiement à la
+  // livraison" plutôt que d'être perdue.
+  try {
+    const lien = await jeko.creerLienPaiement({
+      titre: `Commande ${commande.numero} — Archange Bébé`,
+      montantXof: total,
+      reference: commande.numero,
+    });
+    const commandeAvecLien = await prisma.commandeEnLigne.update({
+      where: { id: commande.id },
+      data: { jekoPaymentLinkId: lien.id, jekoPaymentUrl: lien.link },
+      include: { lignes: true },
+    });
+    res.status(201).json(commandeAvecLien);
+  } catch (err) {
+    res.status(201).json({ ...commande, erreurPaiement: err.message });
+  }
 }
 
 // ------------------------------------------------------------
@@ -326,8 +354,31 @@ async function modifierStatutCommande(req, res) {
   }
 }
 
+// GET /api/boutique/commandes/:numero/statut-paiement  (public — pas d'authentification)
+// Utilisé par la page de confirmation du site pour savoir si le paiement JEKO a été
+// reçu (source de vérité = paiementRecu, mis à jour uniquement par le webhook JEKO,
+// jamais par le client). N'expose que le strict nécessaire, pas la commande entière.
+async function obtenirStatutPaiementCommande(req, res) {
+  const commande = await prisma.commandeEnLigne.findUnique({ where: { numero: req.params.numero } });
+  if (!commande) return res.status(404).json({ error: 'Commande introuvable.' });
+  res.json({
+    numero: commande.numero,
+    modePaiement: commande.modePaiement,
+    paiementRecu: commande.paiementRecu,
+    jekoPaymentUrl: commande.jekoPaymentUrl,
+  });
+}
+
+// GET /api/boutique/jeko-disponible  (public)
+// Permet au site de savoir s'il doit proposer l'option "Payer en ligne" (clés JEKO
+// configurées côté serveur) sans jamais exposer les clés elles-mêmes.
+async function jekoDisponible(req, res) {
+  res.json({ disponible: jeko.estConfigure() });
+}
+
 module.exports = {
   listerProduits, obtenirProduit, listerFamillesPubliques, listerLieuxRetrait,
   inscription, connexion, authClientOptionnelle, monCompte, mesCommandes,
   creerCommande, listerCommandesAdmin, modifierStatutCommande,
+  obtenirStatutPaiementCommande, jekoDisponible,
 };
