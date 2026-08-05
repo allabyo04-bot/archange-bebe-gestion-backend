@@ -376,9 +376,35 @@ async function jekoDisponible(req, res) {
   res.json({ disponible: jeko.estConfigure() });
 }
 
+// POST /api/boutique/commandes/:numero/relancer-paiement  (public)
+// Retente la création du lien JEKO pour une commande dont le paiement en ligne a
+// échoué à se créer la première fois (ex: souci réseau/API JEKO ponctuel). N'a d'effet
+// que sur une commande JEKO pas encore payée — inoffensif à rappeler plusieurs fois.
+async function relancerPaiementCommande(req, res) {
+  const commande = await prisma.commandeEnLigne.findUnique({ where: { numero: req.params.numero } });
+  if (!commande) return res.status(404).json({ error: 'Commande introuvable.' });
+  if (commande.modePaiement !== 'JEKO') return res.status(400).json({ error: "Cette commande n'est pas en paiement en ligne." });
+  if (commande.paiementRecu) return res.status(400).json({ error: 'Cette commande est déjà payée.' });
+
+  try {
+    const lien = await jeko.creerLienPaiement({
+      titre: `Commande ${commande.numero} — Archange Bébé`,
+      montantXof: Number(commande.totalCommande),
+    });
+    const misAJour = await prisma.commandeEnLigne.update({
+      where: { id: commande.id },
+      data: { jekoPaymentLinkId: lien.id, jekoPaymentUrl: lien.link },
+    });
+    res.json({ jekoPaymentUrl: misAJour.jekoPaymentUrl });
+  } catch (err) {
+    console.error(`Échec relance lien JEKO pour commande ${commande.numero} :`, err.message);
+    res.status(500).json({ error: "Le paiement en ligne est momentanément indisponible. Réessaie dans un instant, ou contacte la boutique." });
+  }
+}
+
 module.exports = {
   listerProduits, obtenirProduit, listerFamillesPubliques, listerLieuxRetrait,
   inscription, connexion, authClientOptionnelle, monCompte, mesCommandes,
   creerCommande, listerCommandesAdmin, modifierStatutCommande,
-  obtenirStatutPaiementCommande, jekoDisponible,
+  obtenirStatutPaiementCommande, jekoDisponible, relancerPaiementCommande,
 };

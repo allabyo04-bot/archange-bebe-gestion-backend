@@ -4,7 +4,7 @@ const {
   listerProduits, obtenirProduit, listerFamillesPubliques, listerLieuxRetrait,
   inscription, connexion, authClientOptionnelle, monCompte, mesCommandes,
   creerCommande, listerCommandesAdmin, modifierStatutCommande,
-  obtenirStatutPaiementCommande, jekoDisponible,
+  obtenirStatutPaiementCommande, jekoDisponible, relancerPaiementCommande,
 } = require('../controllers/boutiqueController');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
@@ -23,6 +23,7 @@ router.get('/compte/mes-commandes', authClientOptionnelle, mesCommandes);
 // Commande — invité ou compte (le token client est optionnel ici)
 router.post('/commandes', authClientOptionnelle, creerCommande);
 router.get('/commandes/:numero/statut-paiement', obtenirStatutPaiementCommande);
+router.post('/commandes/:numero/relancer-paiement', relancerPaiementCommande);
 router.get('/jeko-disponible', jekoDisponible);
 
 // Admin — réservé au personnel connecté (staff), distinct du token client
