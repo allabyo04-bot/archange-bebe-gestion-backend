@@ -155,6 +155,21 @@ model Article {
   lignesTransfert    LigneTransfertStock[]
   lignesAvoirRetour  LigneAvoirRetour[]
   photos             PhotoArticle[]
+  avis               AvisArticle[]
+}
+
+// Avis clients laissés sur la fiche produit du site (note 1-5 + commentaire optionnel).
+// Pas de compte requis pour laisser un avis — simple filtre anti-spam basique côté frontend.
+model AvisArticle {
+  id          Int      @id @default(autoincrement())
+  articleId   Int
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  nomClient   String
+  note        Int
+  commentaire String?
+  createdAt   DateTime @default(now())
+
+  @@index([articleId])
 }
 
 // Plusieurs photos par article (galerie), avec une photo principale utilisée

@@ -5,12 +5,16 @@ const {
   inscription, connexion, authClientOptionnelle, monCompte, mesCommandes,
   creerCommande, listerCommandesAdmin, modifierStatutCommande,
   obtenirStatutPaiementCommande, jekoDisponible, relancerPaiementCommande,
+  produitsSimilaires, listerAvisProduit, ajouterAvisProduit,
 } = require('../controllers/boutiqueController');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
 // Catalogue — public, aucune authentification requise
 router.get('/produits', listerProduits);
 router.get('/produits/:id', obtenirProduit);
+router.get('/produits/:id/similaires', produitsSimilaires);
+router.get('/produits/:id/avis', listerAvisProduit);
+router.post('/produits/:id/avis', ajouterAvisProduit);
 router.get('/familles', listerFamillesPubliques);
 router.get('/lieux', listerLieuxRetrait);
 

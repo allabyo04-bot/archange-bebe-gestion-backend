@@ -14,7 +14,7 @@ function genererNumeroCommande() {
 
 // GET /api/boutique/produits?q=&familleId=&sousFamilleId=&enPromo=&page=
 async function listerProduits(req, res) {
-  const { q, familleId, sousFamilleId, enPromo } = req.query;
+  const { q, familleId, sousFamilleId, enPromo, tri } = req.query;
   const page = Math.max(1, Number(req.query.page) || 1);
   const parPage = 24;
 
@@ -29,16 +29,24 @@ async function listerProduits(req, res) {
   if (sousFamilleId) where.sousFamilleId = Number(sousFamilleId);
   if (enPromo === 'true') where.prixPromo = { not: null };
 
+  const tris = {
+    'prix-asc': { prixVente: 'asc' },
+    'prix-desc': { prixVente: 'desc' },
+    'nouveaute': { createdAt: 'desc' },
+    'nom': { designation: 'asc' },
+  };
+  const orderBy = tris[tri] || tris.nom;
+
   const [total, articles] = await Promise.all([
     prisma.article.count({ where }),
     prisma.article.findMany({
       where,
-      orderBy: { designation: 'asc' },
+      orderBy,
       skip: (page - 1) * parPage,
       take: parPage,
       select: {
         id: true, designation: true, reference: true, prixVente: true, prixPromo: true,
-        photoUrl: true, stockActuel: true, familleId: true, sousFamilleId: true,
+        photoUrl: true, stockActuel: true, familleId: true, sousFamilleId: true, createdAt: true,
       },
     }),
   ]);
@@ -61,6 +69,79 @@ async function obtenirProduit(req, res) {
   if (!article || !article.actif) return res.status(404).json({ error: 'Produit introuvable.' });
   const description = article.description || article.sousFamille?.description || null;
   res.json({ ...article, enStock: article.stockActuel > 0, description });
+}
+
+// GET /api/boutique/produits/:id/similaires
+// Autres articles de la même sous-famille (à défaut, même famille), pour la fiche produit.
+async function produitsSimilaires(req, res) {
+  const id = Number(req.params.id);
+  const article = await prisma.article.findUnique({ where: { id } });
+  if (!article) return res.status(404).json({ error: 'Produit introuvable.' });
+
+  const selectChamps = {
+    id: true, designation: true, prixVente: true, prixPromo: true, photoUrl: true, stockActuel: true,
+  };
+
+  let similaires = [];
+  if (article.sousFamilleId) {
+    similaires = await prisma.article.findMany({
+      where: { sousFamilleId: article.sousFamilleId, actif: true, id: { not: id } },
+      select: selectChamps,
+      take: 8,
+    });
+  }
+  if (similaires.length < 4 && article.familleId) {
+    const complement = await prisma.article.findMany({
+      where: {
+        familleId: article.familleId, actif: true, id: { not: id },
+        ...(similaires.length ? { id: { notIn: [id, ...similaires.map((s) => s.id)] } } : {}),
+      },
+      select: selectChamps,
+      take: 8 - similaires.length,
+    });
+    similaires = [...similaires, ...complement];
+  }
+
+  res.json(similaires.map((a) => ({ ...a, enStock: a.stockActuel > 0 })));
+}
+
+// GET /api/boutique/produits/:id/avis
+async function listerAvisProduit(req, res) {
+  const articleId = Number(req.params.id);
+  const avis = await prisma.avisArticle.findMany({
+    where: { articleId },
+    orderBy: { createdAt: 'desc' },
+  });
+  const moyenne = avis.length
+    ? Math.round((avis.reduce((s, a) => s + a.note, 0) / avis.length) * 10) / 10
+    : null;
+  res.json({ avis, moyenne, total: avis.length });
+}
+
+// POST /api/boutique/produits/:id/avis  { nomClient, note, commentaire }
+async function ajouterAvisProduit(req, res) {
+  const articleId = Number(req.params.id);
+  const { nomClient, note, commentaire } = req.body;
+
+  if (!nomClient || !nomClient.trim()) {
+    return res.status(400).json({ error: 'Votre nom est requis.' });
+  }
+  const noteNum = Number(note);
+  if (!noteNum || noteNum < 1 || noteNum > 5) {
+    return res.status(400).json({ error: 'La note doit être comprise entre 1 et 5.' });
+  }
+  const article = await prisma.article.findUnique({ where: { id: articleId } });
+  if (!article) return res.status(404).json({ error: 'Produit introuvable.' });
+
+  const avis = await prisma.avisArticle.create({
+    data: {
+      articleId,
+      nomClient: nomClient.trim().slice(0, 100),
+      note: noteNum,
+      commentaire: commentaire && commentaire.trim() ? commentaire.trim().slice(0, 1000) : null,
+    },
+  });
+  res.status(201).json(avis);
 }
 
 // GET /api/boutique/familles — pour construire le menu de navigation du site
@@ -407,4 +488,5 @@ module.exports = {
   inscription, connexion, authClientOptionnelle, monCompte, mesCommandes,
   creerCommande, listerCommandesAdmin, modifierStatutCommande,
   obtenirStatutPaiementCommande, jekoDisponible, relancerPaiementCommande,
+  produitsSimilaires, listerAvisProduit, ajouterAvisProduit,
 };
