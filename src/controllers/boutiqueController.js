@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
 const jeko = require('../lib/jeko');
+const email = require('../lib/email');
 const { appliquerMouvementStock } = require('../lib/stock');
 
 function genererNumeroCommande() {
@@ -323,6 +324,12 @@ async function creerCommande(req, res) {
       lignes: { create: lignesValidees },
     },
     include: { lignes: true },
+  });
+
+  // Email de confirmation "best-effort" : ne bloque jamais la commande si ça échoue
+  // (email non fourni, service momentanément indisponible...) — juste journalisé.
+  email.envoyerConfirmationCommande(commande).catch((err) => {
+    console.error(`Échec envoi email confirmation pour commande ${commande.numero} :`, err.message);
   });
 
   if (!paiementEnLigne) {
