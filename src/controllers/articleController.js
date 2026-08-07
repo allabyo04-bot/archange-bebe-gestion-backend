@@ -4,15 +4,16 @@ const { genererCodeBarreInterne } = require('../utils/barcode');
 const { genererSvgEAN13 } = require('../utils/ean13');
 const { enregistrerActivite } = require('../lib/journal');
 
-// GET /api/articles?familleId=&sousFamilleId=&enStock=true&q=
+// GET /api/articles?familleId=&sousFamilleId=&enStock=true&q=&prix=
 async function listerArticles(req, res) {
-  const { familleId, sousFamilleId, enStock, q } = req.query;
+  const { familleId, sousFamilleId, enStock, q, prix } = req.query;
 
   const where = { actif: true };
   if (familleId) where.familleId = Number(familleId);
   if (sousFamilleId) where.sousFamilleId = Number(sousFamilleId);
   if (enStock === 'true') where.stockActuel = { gt: 0 };
   if (q && q.trim()) where.designation = { contains: q.trim(), mode: 'insensitive' };
+  if (prix !== undefined && prix !== '' && !Number.isNaN(Number(prix))) where.prixVente = Number(prix);
 
   const articles = await prisma.article.findMany({
     where,
