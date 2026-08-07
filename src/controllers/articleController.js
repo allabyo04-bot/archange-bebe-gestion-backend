@@ -180,7 +180,6 @@ async function genererCodeBarre(req, res) {
     data: {
       codeBarre,
       codeBarreGenere: true,
-      quantiteAImprimer: article.quantiteAImprimer > 0 ? article.quantiteAImprimer : 1,
     },
   });
 
