@@ -95,7 +95,7 @@ async function creerArticle(req, res) {
           reference,
           codeBarre: codeBarre || null,
           codeInterne: codeInterne || null,
-          designation,
+          designation: designation.trim().toUpperCase(),
           familleId: Number(familleId),
           sousFamilleId: Number(sousFamilleId),
           prixAchat: prixAchat || 0,
@@ -132,10 +132,7 @@ async function modifierArticle(req, res) {
   const misAJour = await prisma.article.update({
     where: { id },
     data: {
-      designation,
-      familleId: Number(familleId),
-      sousFamilleId: Number(sousFamilleId),
-      prixAchat: nouveauPrixAchat,
+      designation: designation.trim().toUpperCase(),
       prixVente,
       prixPromo: prixPromo !== undefined ? (prixPromo === '' || prixPromo === null ? null : prixPromo) : article.prixPromo,
       seuilAlerte: seuilAlerte ?? article.seuilAlerte,
