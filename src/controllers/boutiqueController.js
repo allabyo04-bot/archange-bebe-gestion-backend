@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { Prisma } = require('@prisma/client');
 const prisma = require('../lib/prisma');
 const jeko = require('../lib/jeko');
 const serviceEmail = require('../lib/email');
@@ -19,38 +20,40 @@ async function listerProduits(req, res) {
   const page = Math.max(1, Number(req.query.page) || 1);
   const parPage = 24;
 
-  const where = { actif: true };
+  // Requête SQL directe : Prisma ne permet pas de trier par une condition
+  // calculée ("a une photo ou non") tout en gardant un tri secondaire
+  // (nom/prix/nouveauté) — donc ici on construit la clause ORDER BY à la
+  // main, avec les seules valeurs utilisateur passées en paramètres liés
+  // (jamais interpolées directement dans le SQL).
+  const conditions = [Prisma.sql`"actif" = true`];
   if (q) {
-    where.OR = [
-      { designation: { contains: q, mode: 'insensitive' } },
-      { reference: { contains: q, mode: 'insensitive' } },
-    ];
+    conditions.push(Prisma.sql`("designation" ILIKE ${`%${q}%`} OR "reference" ILIKE ${`%${q}%`})`);
   }
-  if (familleId) where.familleId = Number(familleId);
-  if (sousFamilleId) where.sousFamilleId = Number(sousFamilleId);
-  if (enPromo === 'true') where.prixPromo = { not: null };
+  if (familleId) conditions.push(Prisma.sql`"familleId" = ${Number(familleId)}`);
+  if (sousFamilleId) conditions.push(Prisma.sql`"sousFamilleId" = ${Number(sousFamilleId)}`);
+  if (enPromo === 'true') conditions.push(Prisma.sql`"prixPromo" IS NOT NULL`);
+  const whereClause = Prisma.join(conditions, ' AND ');
 
-  const tris = {
-    'prix-asc': { prixVente: 'asc' },
-    'prix-desc': { prixVente: 'desc' },
-    'nouveaute': { createdAt: 'desc' },
-    'nom': { designation: 'asc' },
+  const trisSecondaires = {
+    'prix-asc': Prisma.sql`"prixVente" ASC`,
+    'prix-desc': Prisma.sql`"prixVente" DESC`,
+    'nouveaute': Prisma.sql`"createdAt" DESC`,
+    'nom': Prisma.sql`"designation" ASC`,
   };
-  const orderBy = tris[tri] || tris.nom;
+  const triSecondaire = trisSecondaires[tri] || trisSecondaires.nom;
 
-  const [total, articles] = await Promise.all([
-    prisma.article.count({ where }),
-    prisma.article.findMany({
-      where,
-      orderBy,
-      skip: (page - 1) * parPage,
-      take: parPage,
-      select: {
-        id: true, designation: true, reference: true, prixVente: true, prixPromo: true,
-        photoUrl: true, stockActuel: true, familleId: true, sousFamilleId: true, createdAt: true,
-      },
-    }),
+  const [totalResult, articles] = await Promise.all([
+    prisma.$queryRaw`SELECT COUNT(*)::int AS count FROM "Article" WHERE ${whereClause}`,
+    prisma.$queryRaw`
+      SELECT id, designation, reference, "prixVente", "prixPromo", "photoUrl",
+             "stockActuel", "familleId", "sousFamilleId", "createdAt"
+      FROM "Article"
+      WHERE ${whereClause}
+      ORDER BY ("photoUrl" IS NULL) ASC, ${triSecondaire}
+      LIMIT ${parPage} OFFSET ${(page - 1) * parPage}
+    `,
   ]);
+  const total = totalResult[0].count;
 
   res.json({
     produits: articles.map((a) => ({ ...a, enStock: a.stockActuel > 0 })),
