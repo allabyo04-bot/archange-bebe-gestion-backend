@@ -690,12 +690,28 @@ model CategorieDepense {
   id       Int    @id @default(autoincrement())
   nom      String @unique
   depenses Depense[]
+  sousCategories SousCategorieDepense[]
+}
+
+// Sous-catégorie de dépense (ex: catégorie "Loyer" -> sous-catégories "Loyer
+// boutique principale", "Loyer entrepôt"). Rattachée à une seule catégorie ;
+// le nom doit rester unique au sein de cette catégorie (pas globalement).
+model SousCategorieDepense {
+  id            Int              @id @default(autoincrement())
+  nom           String
+  categorieId   Int
+  categorie     CategorieDepense @relation(fields: [categorieId], references: [id])
+  depenses      Depense[]
+
+  @@unique([categorieId, nom])
 }
 
 model Depense {
   id             Int              @id @default(autoincrement())
   categorieId    Int
   categorie      CategorieDepense @relation(fields: [categorieId], references: [id])
+  sousCategorieId Int?
+  sousCategorie   SousCategorieDepense? @relation(fields: [sousCategorieId], references: [id])
   montant        Decimal
   description    String?
   utilisateurId  Int

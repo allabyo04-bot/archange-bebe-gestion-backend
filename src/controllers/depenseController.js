@@ -12,9 +12,9 @@ function finJournee(date = new Date()) {
   return d;
 }
 
-// GET /api/depenses?categorieId=&dateDebut=&dateFin=&utilisateurId=
+// GET /api/depenses?categorieId=&sousCategorieId=&dateDebut=&dateFin=&utilisateurId=
 async function listerDepenses(req, res) {
-  const { categorieId, dateDebut, dateFin, utilisateurId } = req.query;
+  const { categorieId, sousCategorieId, dateDebut, dateFin, utilisateurId } = req.query;
 
   let where = {};
 
@@ -25,6 +25,7 @@ async function listerDepenses(req, res) {
     };
   } else {
     if (categorieId) where.categorieId = Number(categorieId);
+    if (sousCategorieId) where.sousCategorieId = Number(sousCategorieId);
     if (utilisateurId) where.utilisateurId = Number(utilisateurId);
     if (dateDebut || dateFin) {
       where.dateDepense = {};
@@ -35,36 +36,47 @@ async function listerDepenses(req, res) {
 
   const depenses = await prisma.depense.findMany({
     where,
-    include: { categorie: true, utilisateur: { select: { id: true, nomComplet: true } }, lieu: true },
+    include: { categorie: true, sousCategorie: true, utilisateur: { select: { id: true, nomComplet: true } }, lieu: true },
     orderBy: { dateDepense: 'desc' },
   });
   res.json(depenses);
 }
 
-// POST /api/depenses   { categorieId, montant, description?, dateDepense? }
+// POST /api/depenses   { categorieId, sousCategorieId?, montant, description?, dateDepense? }
 async function creerDepense(req, res) {
-  const { categorieId, montant, description, dateDepense, lieuId } = req.body;
+  const { categorieId, sousCategorieId, montant, description, dateDepense, lieuId } = req.body;
   if (!categorieId || !montant) {
     return res.status(400).json({ error: 'Catégorie et montant sont requis.' });
+  }
+
+  if (sousCategorieId) {
+    const sousCategorie = await prisma.sousCategorieDepense.findUnique({ where: { id: Number(sousCategorieId) } });
+    if (!sousCategorie || sousCategorie.categorieId !== Number(categorieId)) {
+      return res.status(400).json({ error: "Cette sous-catégorie n'appartient pas à la catégorie choisie." });
+    }
   }
 
   const depense = await prisma.depense.create({
     data: {
       categorieId: Number(categorieId),
+      sousCategorieId: sousCategorieId ? Number(sousCategorieId) : null,
       montant,
       description: description || null,
       utilisateurId: req.user.id,
       dateDepense: dateDepense ? new Date(dateDepense) : new Date(),
       lieuId: lieuId ? Number(lieuId) : null,
     },
-    include: { categorie: true, lieu: true },
+    include: { categorie: true, sousCategorie: true, lieu: true },
   });
   res.status(201).json(depense);
 }
 
 // GET /api/depenses/categories
 async function listerCategories(req, res) {
-  const categories = await prisma.categorieDepense.findMany({ orderBy: { nom: 'asc' } });
+  const categories = await prisma.categorieDepense.findMany({
+    orderBy: { nom: 'asc' },
+    include: { sousCategories: { orderBy: { nom: 'asc' } } },
+  });
   res.json(categories);
 }
 
@@ -145,6 +157,60 @@ async function syntheseBudget(req, res) {
   });
 }
 
+// POST /api/depenses/categories/:categorieId/sous-categories   { nom }   (ADMIN uniquement)
+async function creerSousCategorie(req, res) {
+  const categorieId = Number(req.params.categorieId);
+  const { nom } = req.body;
+  if (!nom || !nom.trim()) return res.status(400).json({ error: 'Le nom de la sous-catégorie est requis.' });
+
+  const categorie = await prisma.categorieDepense.findUnique({ where: { id: categorieId } });
+  if (!categorie) return res.status(404).json({ error: 'Catégorie introuvable.' });
+
+  try {
+    const sousCategorie = await prisma.sousCategorieDepense.create({
+      data: { nom: nom.trim(), categorieId },
+    });
+    res.status(201).json(sousCategorie);
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Cette sous-catégorie existe déjà dans cette catégorie.' });
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+}
+
+// PUT /api/depenses/sous-categories/:id   { nom }   (ADMIN uniquement)
+async function modifierSousCategorie(req, res) {
+  const id = Number(req.params.id);
+  const { nom } = req.body;
+  if (!nom || !nom.trim()) return res.status(400).json({ error: 'Le nom de la sous-catégorie est requis.' });
+
+  const sousCategorie = await prisma.sousCategorieDepense.findUnique({ where: { id } });
+  if (!sousCategorie) return res.status(404).json({ error: 'Sous-catégorie introuvable.' });
+
+  try {
+    const misAJour = await prisma.sousCategorieDepense.update({ where: { id }, data: { nom: nom.trim() } });
+    res.json(misAJour);
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Cette sous-catégorie existe déjà dans cette catégorie.' });
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+}
+
+// DELETE /api/depenses/sous-categories/:id   (ADMIN uniquement)
+async function supprimerSousCategorie(req, res) {
+  const id = Number(req.params.id);
+  const sousCategorie = await prisma.sousCategorieDepense.findUnique({
+    where: { id },
+    include: { _count: { select: { depenses: true } } },
+  });
+  if (!sousCategorie) return res.status(404).json({ error: 'Sous-catégorie introuvable.' });
+  if (sousCategorie._count.depenses > 0) {
+    return res.status(400).json({ error: `Cette sous-catégorie est utilisée par ${sousCategorie._count.depenses} dépense(s), suppression impossible.` });
+  }
+  await prisma.sousCategorieDepense.delete({ where: { id } });
+  res.json({ ok: true });
+}
+
 module.exports = {
   listerDepenses, creerDepense, listerCategories, creerCategorie, modifierCategorie, supprimerCategorie, syntheseBudget,
+  creerSousCategorie, modifierSousCategorie, supprimerSousCategorie,
 };
