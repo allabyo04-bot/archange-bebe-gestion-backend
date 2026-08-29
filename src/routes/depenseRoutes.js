@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   listerDepenses, creerDepense, listerCategories, creerCategorie, modifierCategorie, supprimerCategorie, syntheseBudget,
   creerSousCategorie, modifierSousCategorie, supprimerSousCategorie,
+  modifierDepense, supprimerDepense,
 } = require('../controllers/depenseController');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
@@ -16,5 +17,7 @@ router.delete('/sous-categories/:id', requireAuth, requireRole('ADMIN'), supprim
 router.get('/budget', requireAuth, requireRole('ADMIN'), syntheseBudget);
 router.get('/', requireAuth, listerDepenses);
 router.post('/', requireAuth, creerDepense);
+router.put('/:id', requireAuth, modifierDepense);
+router.delete('/:id', requireAuth, supprimerDepense);
 
 module.exports = router;

@@ -210,7 +210,64 @@ async function supprimerSousCategorie(req, res) {
   res.json({ ok: true });
 }
 
+// Vérifie qu'une dépense peut être touchée par l'utilisateur courant : un admin
+// peut tout modifier/supprimer, un non-admin uniquement ses propres saisies du
+// jour même (mêmes règles que la visibilité en lecture).
+async function verifierDroitSurDepense(req, depenseId) {
+  const depense = await prisma.depense.findUnique({ where: { id: depenseId } });
+  if (!depense) return { erreur: 404, message: 'Dépense introuvable.' };
+  if (req.user.role === 'ADMIN') return { depense };
+  if (depense.utilisateurId !== req.user.id) {
+    return { erreur: 403, message: "Vous ne pouvez modifier que vos propres dépenses." };
+  }
+  if (depense.dateDepense < debutJournee() || depense.dateDepense > finJournee()) {
+    return { erreur: 403, message: "Cette dépense ne date pas d'aujourd'hui, seul un administrateur peut la corriger." };
+  }
+  return { depense };
+}
+
+// PUT /api/depenses/:id   { categorieId?, sousCategorieId?, montant?, description?, dateDepense? }
+async function modifierDepense(req, res) {
+  const id = Number(req.params.id);
+  const { erreur, message, depense } = await verifierDroitSurDepense(req, id);
+  if (erreur) return res.status(erreur).json({ error: message });
+
+  const { categorieId, sousCategorieId, montant, description, dateDepense } = req.body;
+
+  if (sousCategorieId !== undefined && sousCategorieId !== null) {
+    const cible = categorieId !== undefined ? Number(categorieId) : depense.categorieId;
+    const sousCategorie = await prisma.sousCategorieDepense.findUnique({ where: { id: Number(sousCategorieId) } });
+    if (!sousCategorie || sousCategorie.categorieId !== cible) {
+      return res.status(400).json({ error: "Cette sous-catégorie n'appartient pas à la catégorie choisie." });
+    }
+  }
+
+  const misAJour = await prisma.depense.update({
+    where: { id },
+    data: {
+      categorieId: categorieId !== undefined ? Number(categorieId) : undefined,
+      sousCategorieId: sousCategorieId !== undefined ? (sousCategorieId ? Number(sousCategorieId) : null) : undefined,
+      montant: montant !== undefined ? montant : undefined,
+      description: description !== undefined ? (description || null) : undefined,
+      dateDepense: dateDepense !== undefined ? new Date(dateDepense) : undefined,
+    },
+    include: { categorie: true, sousCategorie: true, lieu: true },
+  });
+  res.json(misAJour);
+}
+
+// DELETE /api/depenses/:id
+async function supprimerDepense(req, res) {
+  const id = Number(req.params.id);
+  const { erreur, message } = await verifierDroitSurDepense(req, id);
+  if (erreur) return res.status(erreur).json({ error: message });
+
+  await prisma.depense.delete({ where: { id } });
+  res.json({ ok: true });
+}
+
 module.exports = {
   listerDepenses, creerDepense, listerCategories, creerCategorie, modifierCategorie, supprimerCategorie, syntheseBudget,
   creerSousCategorie, modifierSousCategorie, supprimerSousCategorie,
+  modifierDepense, supprimerDepense,
 };
