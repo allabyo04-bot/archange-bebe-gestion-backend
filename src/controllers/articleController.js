@@ -103,6 +103,7 @@ async function creerArticle(req, res) {
           prixVente,
           seuilAlerte: seuilAlerte ?? 5,
           description: description && description.trim() ? description.trim() : null,
+          creeParId: req.user.id,
         },
       });
     });

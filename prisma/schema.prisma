@@ -77,6 +77,8 @@ model Utilisateur {
   reglementsCredit  ReglementCredit[]
   avoirsCrees       Avoir[]
   demandesAnnulation Vente[]    @relation("DemandeurAnnulationVente")
+  articlesCrees     Article[]   @relation("CreateurArticle")
+  receptions        Reception[]
 }
 model JournalActivite {
   id            Int         @id @default(autoincrement())
@@ -146,6 +148,11 @@ model Article {
   actif           Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+  // Qui a créé cet article — permet de tracer l'activité d'un utilisateur
+  // (ex: rapport d'activité d'un gestionnaire de stock). Optionnel pour ne pas
+  // casser les articles déjà existants créés avant ce champ.
+  creeParId       Int?
+  creePar         Utilisateur? @relation("CreateurArticle", fields: [creeParId], references: [id])
 
   ligneVentes        LigneVente[]
   mouvementsStock    MouvementStock[]
@@ -236,6 +243,10 @@ model Reception {
   dateReception DateTime  @default(now())
   notes         String?
   createdAt     DateTime  @default(now())
+  // Qui a saisi cette réception — permet de tracer l'activité d'un utilisateur.
+  // Optionnel pour ne pas casser les réceptions déjà existantes.
+  utilisateurId Int?
+  utilisateur   Utilisateur? @relation(fields: [utilisateurId], references: [id])
 
   lignes        LigneReception[]
 }

@@ -21,6 +21,7 @@ async function creerReception(req, res) {
           reference: reference || null,
           lieuId: Number(lieuId),
           notes: notes || null,
+          utilisateurId,
           lignes: {
             create: lignes.map((l) => ({
               articleId: Number(l.articleId),
