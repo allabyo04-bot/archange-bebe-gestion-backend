@@ -65,9 +65,21 @@ async function ajouterReglement(req, res) {
         throw new Error(`Le montant dépasse le solde restant dû (${restant.toFixed(2)}).`);
       }
 
-      return tx.reglementCredit.create({
+      const reglement = await tx.reglementCredit.create({
         data: { venteId, montant: Number(montant), mode, utilisateurId },
       });
+
+      const venteAvecInfos = await tx.vente.findUnique({
+        where: { id: venteId },
+        include: { client: true, lieu: true, vendeur: true },
+      });
+
+      return {
+        reglement,
+        vente: venteAvecInfos,
+        totalPayeApres: dejaPaye + Number(montant),
+        montantRestantApres: Math.max(0, restant - Number(montant)),
+      };
     }, { maxWait: 10000, timeout: 20000 });
 
     res.status(201).json(resultat);
