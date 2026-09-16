@@ -64,6 +64,9 @@ model Utilisateur {
   lieuId        Int?
   lieu          Lieu?           @relation(fields: [lieuId], references: [id])
   actif         Boolean         @default(true)
+  // Force l'utilisateur à choisir un nouveau code PIN dès sa prochaine connexion
+  // — posé automatiquement après une réinitialisation de PIN par un administrateur.
+  doitChangerPin Boolean        @default(false)
   createdAt     DateTime        @default(now())
 
   ventes            Vente[]

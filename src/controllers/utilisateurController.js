@@ -27,7 +27,7 @@ async function creerUtilisateur(req, res) {
     return res.status(400).json({ error: 'Rôle invalide.' });
   }
 
-  const existant = await prisma.utilisateur.findUnique({ where: { nomUtilisateur } });
+  const existant = await prisma.utilisateur.findUnique({ where: { nomUtilisateur: nomUtilisateur.trim().toLowerCase() } });
   if (existant) {
     return res.status(409).json({ error: "Ce nom d'utilisateur existe déjà." });
   }
@@ -39,7 +39,7 @@ async function creerUtilisateur(req, res) {
   // encore dessus (bascule d'accès complet, badges, etc.).
   const utilisateur = await prisma.utilisateur.create({
     data: {
-      nomUtilisateur,
+      nomUtilisateur: nomUtilisateur.trim().toLowerCase(),
       pin: pinHache,
       nomComplet,
       role: roleChoisi.estAdmin ? 'ADMIN' : 'CAISSIER',
@@ -102,9 +102,33 @@ async function reinitialiserPin(req, res) {
   if (!utilisateur) return res.status(404).json({ error: 'Utilisateur introuvable.' });
 
   const pinHache = await bcrypt.hash(pin, 10);
-  await prisma.utilisateur.update({ where: { id }, data: { pin: pinHache } });
+  await prisma.utilisateur.update({ where: { id }, data: { pin: pinHache, doitChangerPin: true } });
 
   res.json({ ok: true });
 }
 
-module.exports = { listerUtilisateurs, creerUtilisateur, modifierUtilisateur, reinitialiserPin };
+// POST /api/utilisateurs/changer-mon-pin   { ancienPin, nouveauPin }   (self-service, connecté)
+async function changerMonPin(req, res) {
+  const { ancienPin, nouveauPin } = req.body;
+  if (!/^\d{4,6}$/.test(nouveauPin || '')) {
+    return res.status(400).json({ error: 'Le nouveau PIN doit comporter entre 4 et 6 chiffres.' });
+  }
+
+  const utilisateur = await prisma.utilisateur.findUnique({ where: { id: req.user.id } });
+  if (!utilisateur) return res.status(404).json({ error: 'Utilisateur introuvable.' });
+
+  const ancienValide = await bcrypt.compare(ancienPin || '', utilisateur.pin);
+  if (!ancienValide) {
+    return res.status(400).json({ error: 'Ancien PIN incorrect.' });
+  }
+  if (ancienPin === nouveauPin) {
+    return res.status(400).json({ error: 'Le nouveau PIN doit être différent de l\'ancien.' });
+  }
+
+  const pinHache = await bcrypt.hash(nouveauPin, 10);
+  await prisma.utilisateur.update({ where: { id: req.user.id }, data: { pin: pinHache, doitChangerPin: false } });
+
+  res.json({ ok: true });
+}
+
+module.exports = { listerUtilisateurs, creerUtilisateur, modifierUtilisateur, reinitialiserPin, changerMonPin };

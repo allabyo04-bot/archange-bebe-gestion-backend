@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
-  listerUtilisateurs, creerUtilisateur, modifierUtilisateur, reinitialiserPin,
+  listerUtilisateurs, creerUtilisateur, modifierUtilisateur, reinitialiserPin, changerMonPin,
 } = require('../controllers/utilisateurController');
 const { rapportActivite } = require('../controllers/rapportActiviteController');
 const { requireAuth, requireRole } = require('../middleware/auth');
@@ -11,5 +11,6 @@ router.post('/', requireAuth, requireRole('ADMIN'), creerUtilisateur);
 router.put('/:id', requireAuth, requireRole('ADMIN'), modifierUtilisateur);
 router.post('/:id/reinitialiser-pin', requireAuth, requireRole('ADMIN'), reinitialiserPin);
 router.get('/:id/rapport-activite', requireAuth, requireRole('ADMIN'), rapportActivite);
+router.post('/changer-mon-pin', requireAuth, changerMonPin);
 
 module.exports = router;
