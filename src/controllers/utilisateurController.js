@@ -61,6 +61,10 @@ async function modifierUtilisateur(req, res) {
   const utilisateur = await prisma.utilisateur.findUnique({ where: { id } });
   if (!utilisateur) return res.status(404).json({ error: 'Utilisateur introuvable.' });
 
+  if (actif === false && utilisateur.role === 'ADMIN') {
+    return res.status(400).json({ error: "Un compte Administrateur ne peut pas être désactivé (pour éviter de se retrouver bloqué hors de l'application). Changez d'abord son rôle si vous voulez vraiment le désactiver." });
+  }
+
   let nouvelIdentifiant = utilisateur.nomUtilisateur;
   if (nomUtilisateur !== undefined && nomUtilisateur.trim()) {
     nouvelIdentifiant = nomUtilisateur.trim().toLowerCase();

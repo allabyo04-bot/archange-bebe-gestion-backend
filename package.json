@@ -6,7 +6,7 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "node src/server.js",
-    "start": "npx prisma db push --skip-generate && node scripts/normaliserIdentifiants.js && node scripts/fermerBoutiqueSecondaire.js && node src/server.js",
+    "start": "npx prisma db push --skip-generate && node scripts/normaliserIdentifiants.js && node scripts/fermerBoutiqueSecondaire.js && node scripts/reactiverAdmins.js && node src/server.js",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
