@@ -15,8 +15,11 @@ async function login(req, res) {
     include: { roleDynamique: { include: { permissions: true } }, lieu: true },
   });
 
-  if (!utilisateur || !utilisateur.actif) {
+  if (!utilisateur) {
     return res.status(401).json({ error: 'Identifiants invalides.' });
+  }
+  if (!utilisateur.actif) {
+    return res.status(401).json({ error: 'Ce compte est désactivé — demandez à un administrateur de l\'activer.' });
   }
 
   const pinValide = await bcrypt.compare(pin, utilisateur.pin);
