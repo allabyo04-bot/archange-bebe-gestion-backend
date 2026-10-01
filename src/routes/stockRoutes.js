@@ -7,7 +7,10 @@ const { creerReception, listerReceptions } = require('../controllers/receptionCo
 const { creerTransfert, listerTransferts } = require('../controllers/transfertController');
 const { previsualiserImport, confirmerImport } = require('../controllers/importStockController');
 const { listerMouvements } = require('../controllers/mouvementController');
-const { previsualiserInventaire, appliquerInventaire } = require('../controllers/inventaireController');
+const {
+  previsualiserInventaire, appliquerInventaire,
+  listerInventairesEnAttente, validerInventaire, rejeterInventaire,
+} = require('../controllers/inventaireController');
 const { requireAuth, requireRole, requireModule } = require('../middleware/auth');
 
 // Les opérations de stock (réception, transfert, inventaire, import) suivent désormais
@@ -26,6 +29,10 @@ router.post('/transferts', requireAuth, requireModule('STOCK'), creerTransfert);
 router.get('/mouvements', requireAuth, listerMouvements);
 router.get('/inventaire', requireAuth, requireModule('STOCK'), previsualiserInventaire);
 router.post('/inventaire', requireAuth, requireModule('STOCK'), appliquerInventaire);
+// Comptages des non-admins en attente : chacun voit les siens, seul un admin valide/rejette.
+router.get('/inventaires-en-attente', requireAuth, requireModule('STOCK'), listerInventairesEnAttente);
+router.post('/inventaires-en-attente/:id/valider', requireAuth, requireRole('ADMIN'), validerInventaire);
+router.post('/inventaires-en-attente/:id/rejeter', requireAuth, requireRole('ADMIN'), rejeterInventaire);
 router.post('/import/previsualiser', requireAuth, requireModule('STOCK'), upload.single('fichier'), previsualiserImport);
 router.post('/import/confirmer', requireAuth, requireModule('STOCK'), confirmerImport);
 

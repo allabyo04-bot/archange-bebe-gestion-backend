@@ -25,10 +25,13 @@ async function rapportActivite(req, res) {
   }
   const whereDate = Object.keys(periode).length > 0 ? periode : undefined;
 
-  const [articlesCrees, modificationsPrix, receptions, corrections, transferts] = await Promise.all([
+  const [articlesCrees, modificationsPrix, receptions, corrections, transferts, famillesCreees, inventairesSoumis] = await Promise.all([
     prisma.article.findMany({
       where: { creeParId: utilisateurId, ...(whereDate ? { createdAt: whereDate } : {}) },
-      select: { id: true, reference: true, designation: true, prixVente: true, createdAt: true },
+      select: {
+        id: true, reference: true, designation: true, prixAchat: true, prixVente: true, createdAt: true,
+        famille: { select: { nom: true } }, sousFamille: { select: { nom: true } },
+      },
       orderBy: { createdAt: 'desc' },
     }),
     prisma.journalActivite.findMany({
@@ -51,6 +54,18 @@ async function rapportActivite(req, res) {
       include: { article: { select: { reference: true, designation: true } }, lieu: { select: { nom: true } } },
       orderBy: { createdAt: 'desc' },
     }),
+    // Familles / sous-familles créées : tracées dans le journal d'activité.
+    prisma.journalActivite.findMany({
+      where: { utilisateurId, type: { in: ['CREATION_FAMILLE', 'CREATION_SOUS_FAMILLE'] }, ...(whereDate ? { createdAt: whereDate } : {}) },
+      select: { type: true, description: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    }),
+    // Comptages d'inventaire soumis à validation (non-admin), quel que soit leur sort.
+    prisma.inventaireEnAttente.findMany({
+      where: { utilisateurId, ...(whereDate ? { createdAt: whereDate } : {}) },
+      include: { lieu: { select: { nom: true } }, traitePar: { select: { nomComplet: true } }, lignes: true },
+      orderBy: { createdAt: 'desc' },
+    }),
   ]);
 
   res.json({
@@ -64,9 +79,20 @@ async function rapportActivite(req, res) {
       quantiteTotaleReceptionnee: receptions.reduce((s, r) => s + r.lignes.reduce((s2, l) => s2 + l.quantite, 0), 0),
       nbCorrectionsInventaire: corrections.length,
       nbTransferts: transferts.length,
+      nbFamillesCreees: famillesCreees.filter((f) => f.type === 'CREATION_FAMILLE').length,
+      nbSousFamillesCreees: famillesCreees.filter((f) => f.type === 'CREATION_SOUS_FAMILLE').length,
+      nbInventairesSoumis: inventairesSoumis.length,
+      nbInventairesEnAttente: inventairesSoumis.filter((i) => i.statut === 'EN_ATTENTE').length,
     },
     detail: {
-      articlesCrees,
+      articlesCrees: articlesCrees.map((a) => ({
+        ...a, famille: a.famille?.nom || null, sousFamille: a.sousFamille?.nom || null,
+      })),
+      famillesCreees: famillesCreees.map((f) => ({ date: f.createdAt, description: f.description })),
+      inventairesSoumis: inventairesSoumis.map((i) => ({
+        id: i.id, date: i.createdAt, lieu: i.lieu?.nom, nbLignes: i.lignes.length,
+        statut: i.statut, traitePar: i.traitePar?.nomComplet || null, traiteLe: i.traiteLe, motifRejet: i.motifRejet,
+      })),
       modificationsPrix,
       receptions: receptions.map((r) => ({
         id: r.id, date: r.createdAt, lieu: r.lieu?.nom, fournisseur: r.fournisseur,

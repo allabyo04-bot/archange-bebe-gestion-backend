@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const { enregistrerActivite } = require('../lib/journal');
 
 // GET /api/familles  -> familles avec leurs sous-familles
 async function listerFamilles(req, res) {
@@ -16,6 +17,10 @@ async function creerFamille(req, res) {
   if (!nom) return res.status(400).json({ error: 'Le nom de la famille est requis.' });
   try {
     const famille = await prisma.famille.create({ data: { nom } });
+    // Tracé pour le rapport d'activité (qui a créé quoi, et quand).
+    await enregistrerActivite(prisma, {
+      type: 'CREATION_FAMILLE', description: `Famille « ${famille.nom} » créée`, utilisateurId: req.user.id,
+    });
     res.status(201).json(famille);
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Cette famille existe déjà.' });
@@ -36,6 +41,12 @@ async function creerSousFamille(req, res) {
   try {
     const sousFamille = await prisma.sousFamille.create({
       data: { nom, familleId, codePrefixe: codePrefixe.trim().toUpperCase() },
+      include: { famille: true },
+    });
+    await enregistrerActivite(prisma, {
+      type: 'CREATION_SOUS_FAMILLE',
+      description: `Sous-famille « ${sousFamille.nom} » (code ${sousFamille.codePrefixe}) créée dans « ${sousFamille.famille.nom} »`,
+      utilisateurId: req.user.id,
     });
     res.status(201).json(sousFamille);
   } catch (err) {

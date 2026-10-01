@@ -82,6 +82,8 @@ model Utilisateur {
   demandesAnnulation Vente[]    @relation("DemandeurAnnulationVente")
   articlesCrees     Article[]   @relation("CreateurArticle")
   receptions        Reception[]
+  inventairesSoumis InventaireEnAttente[] @relation("AuteurInventaire")
+  inventairesTraites InventaireEnAttente[] @relation("ValidateurInventaire")
 }
 model JournalActivite {
   id            Int         @id @default(autoincrement())
@@ -166,6 +168,7 @@ model Article {
   lignesAvoirRetour  LigneAvoirRetour[]
   photos             PhotoArticle[]
   avis               AvisArticle[]
+  lignesInventaireEnAttente LigneInventaireEnAttente[]
 }
 
 // Avis clients laissés sur la fiche produit du site (note 1-5 + commentaire optionnel).
@@ -225,6 +228,7 @@ model Lieu {
   carteCadeauCycles CarteCadeauCycle[]
   vendeurs              Vendeur[]
   depenses              Depense[]
+  inventairesEnAttente  InventaireEnAttente[]
 }
 
 model StockEmplacement {
@@ -749,4 +753,40 @@ model PaiementVente {
   mode      String
   montant   Decimal
   createdAt DateTime @default(now())
+}
+
+// ------------------------------------------------------------
+// INVENTAIRES EN ATTENTE DE VALIDATION
+// ------------------------------------------------------------
+// Un compte non-admin (ex. gestionnaire de stock) ne corrige pas le stock directement :
+// son comptage est enregistré ici, et le stock ne change qu'au moment où un administrateur
+// valide. On garde le stock système AU MOMENT DU COMPTAGE : à la validation on applique
+// l'écart constaté (et non la quantité comptée), pour ne pas effacer les ventes faites
+// entre le comptage et la validation.
+model InventaireEnAttente {
+  id            Int         @id @default(autoincrement())
+  lieuId        Int
+  lieu          Lieu        @relation(fields: [lieuId], references: [id])
+  utilisateurId Int
+  utilisateur   Utilisateur @relation("AuteurInventaire", fields: [utilisateurId], references: [id])
+  notes         String?
+  statut        String      @default("EN_ATTENTE") // 'EN_ATTENTE' | 'VALIDE' | 'REJETE'
+  traiteParId   Int?
+  traitePar     Utilisateur? @relation("ValidateurInventaire", fields: [traiteParId], references: [id])
+  traiteLe      DateTime?
+  motifRejet    String?
+  createdAt     DateTime    @default(now())
+
+  lignes        LigneInventaireEnAttente[]
+}
+
+model LigneInventaireEnAttente {
+  id              Int                 @id @default(autoincrement())
+  inventaireId    Int
+  inventaire      InventaireEnAttente @relation(fields: [inventaireId], references: [id], onDelete: Cascade)
+  articleId       Int
+  article         Article             @relation(fields: [articleId], references: [id])
+  stockSysteme    Int
+  quantiteComptee Int
+  ecart           Int
 }

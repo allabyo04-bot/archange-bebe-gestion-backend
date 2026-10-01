@@ -33,7 +33,7 @@ async function obtenirDashboard(req, res) {
     ...(lieuFiltre ? { lieuId: lieuFiltre } : {}),
   };
 
-  const [ventesDuJour, depensesDuJour, demandesRemiseEnAttente, recompensesEnAttente, ventesAvecRemiseMois] =
+  const [ventesDuJour, depensesDuJour, demandesRemiseEnAttente, recompensesEnAttente, ventesAvecRemiseMois, inventairesAValider] =
     await Promise.all([
       prisma.vente.findMany({ where }),
       prisma.depense.findMany({ where: whereDepenses }),
@@ -46,6 +46,8 @@ async function obtenirDashboard(req, res) {
         },
         select: { remiseMontant: true, createdAt: true },
       }),
+      // Comptages d'inventaire des non-admins attendant la validation d'un admin.
+      prisma.inventaireEnAttente.count({ where: { statut: 'EN_ATTENTE' } }),
     ]);
 
   // Prisma ne compare pas nativement deux colonnes entre elles (stockActuel <= seuilAlerte) ;
@@ -139,6 +141,7 @@ async function obtenirDashboard(req, res) {
     ventes: { nombre: ventesDuJour.length, total: totalVentes },
     depenses: { nombre: depensesDuJour.length, total: totalDepenses },
     resultatJour: totalVentes - totalDepenses,
+    inventairesAValider,
     alertesStock: articlesStockBas.map((a) => ({
       id: a.id, designation: a.designation, stockActuel: a.stockActuel, seuilAlerte: a.seuilAlerte,
     })),
