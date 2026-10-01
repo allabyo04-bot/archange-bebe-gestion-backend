@@ -13,6 +13,19 @@ async function creerReception(req, res) {
     return res.status(400).json({ error: 'Lieu et au moins une ligne sont requis.' });
   }
 
+  // Un non-admin ne voit pas et ne fixe pas le prix d'achat : on reprend le prix d'achat
+  // actuel de chaque article pour la ligne de réception (les marges restent justes), et on
+  // ne touche pas à celui de la fiche article (sinon une réception servirait à le modifier).
+  const estAdmin = req.user.role === 'ADMIN';
+  let prixActuels = {};
+  if (!estAdmin) {
+    const articles = await prisma.article.findMany({
+      where: { id: { in: lignes.map((l) => Number(l.articleId)) } },
+      select: { id: true, prixAchat: true },
+    });
+    prixActuels = Object.fromEntries(articles.map((a) => [a.id, a.prixAchat]));
+  }
+
   try {
     const reception = await prisma.$transaction(async (tx) => {
       const rec = await tx.reception.create({
@@ -26,7 +39,7 @@ async function creerReception(req, res) {
             create: lignes.map((l) => ({
               articleId: Number(l.articleId),
               quantite: Number(l.quantite),
-              prixAchat: l.prixAchat,
+              prixAchat: estAdmin ? l.prixAchat : (prixActuels[Number(l.articleId)] ?? 0),
               datePeremption: l.datePeremption ? new Date(l.datePeremption) : null,
             })),
           },
@@ -41,7 +54,7 @@ async function creerReception(req, res) {
         await tx.article.update({
           where: { id: ligne.articleId },
           data: {
-            prixAchat: ligne.prixAchat,
+            ...(estAdmin ? { prixAchat: ligne.prixAchat } : {}),
             quantiteAImprimer: { increment: ligne.quantite },
           },
         });

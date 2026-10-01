@@ -39,6 +39,8 @@ async function previsualiserImport(req, res) {
       });
     }
 
+    // Les prix de cet aperçu viennent du fichier de l'utilisateur lui-même : on les lui laisse.
+    res.locals.garderPrixAchat = true;
     res.json({ nombreLignes: apercu.length, lignes: apercu });
   } catch (err) {
     res.status(400).json({ error: `Fichier Excel illisible : ${err.message}` });
@@ -74,14 +76,20 @@ async function confirmerImport(req, res) {
               designation: l.designation,
               prixAchat: l.prixAchat || 0,
               prixVente: l.prixVente,
+              creeParId: utilisateurId, // tracé dans le rapport d'activité comme une création
             },
           });
           articleId = nouvelArticle.id;
-        } else {
+          lignesReception.push({ articleId, quantite: Number(l.quantite), prixAchat: l.prixAchat || 0 });
+        } else if (req.user.role === 'ADMIN') {
           await tx.article.update({ where: { id: articleId }, data: { prixAchat: l.prixAchat } });
+          lignesReception.push({ articleId, quantite: Number(l.quantite), prixAchat: l.prixAchat });
+        } else {
+          // Non-admin : le prix d'achat d'un article existant n'est pas modifié par l'import ;
+          // la ligne de réception reprend le prix actuel de la fiche.
+          const existant = await tx.article.findUnique({ where: { id: articleId }, select: { prixAchat: true } });
+          lignesReception.push({ articleId, quantite: Number(l.quantite), prixAchat: existant?.prixAchat ?? 0 });
         }
-
-        lignesReception.push({ articleId, quantite: Number(l.quantite), prixAchat: l.prixAchat });
       }
 
       const rec = await tx.reception.create({

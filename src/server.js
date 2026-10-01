@@ -35,6 +35,8 @@ app.use(cors());
 app.use('/api/webhooks/jeko', express.raw({ type: 'application/json' }), webhookJekoRoutes);
 
 app.use(express.json());
+// Prix d'achat retiré de toutes les réponses pour les comptes non-admin (voir le middleware).
+app.use(require('./middleware/masquerPrixAchat').masquerPrixAchat);
 
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'Jesma U - Gestion Commerciale' }));
 
