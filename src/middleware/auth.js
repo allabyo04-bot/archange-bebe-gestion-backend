@@ -48,4 +48,23 @@ function requireModule(module) {
   };
 }
 
-module.exports = { requireAuth, requireRole, requireModule };
+// Utilisation : requireUnDesModules('ARTICLES', 'STOCK')
+// Comme requireModule, mais accepte le compte s'il a AU MOINS UN des modules listés
+// (ex. impression d'étiquettes, utile à la fois depuis Articles et depuis Stock).
+function requireUnDesModules(...modules) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Non authentifié.' });
+    }
+    if (req.user.role === 'ADMIN') {
+      return next();
+    }
+    const permissions = req.user.permissions || [];
+    if (!modules.some((m) => permissions.includes(m))) {
+      return res.status(403).json({ error: 'Accès refusé : ce rôle ne donne pas accès à ce module.' });
+    }
+    next();
+  };
+}
+
+module.exports = { requireAuth, requireRole, requireModule, requireUnDesModules };

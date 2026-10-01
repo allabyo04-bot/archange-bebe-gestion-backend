@@ -5,13 +5,14 @@ const {
   listerCodesAImprimer, imprimerEtiquettes, uploaderPhoto, supprimerPhoto, definirPhotoPrincipale,
   deplacerGroupe, stockParDepot,
 } = require('../controllers/articleController');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, requireUnDesModules } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 router.get('/', requireAuth, listerArticles);
 router.get('/recherche', requireAuth, rechercherArticle);
-router.get('/a-imprimer', requireAuth, requireRole('ADMIN'), listerCodesAImprimer);
-router.post('/a-imprimer/etiquettes', requireAuth, requireRole('ADMIN'), imprimerEtiquettes);
+// Impression d'étiquettes : aussi utilisée depuis l'écran Stock (après réception, historique).
+router.get('/a-imprimer', requireAuth, requireUnDesModules('ARTICLES', 'STOCK'), listerCodesAImprimer);
+router.post('/a-imprimer/etiquettes', requireAuth, requireUnDesModules('ARTICLES', 'STOCK'), imprimerEtiquettes);
 router.post('/', requireAuth, requireRole('ADMIN'), creerArticle);
 router.put('/deplacer-groupe', requireAuth, requireRole('ADMIN'), deplacerGroupe);
 router.put('/:id', requireAuth, requireRole('ADMIN'), modifierArticle);

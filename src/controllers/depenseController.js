@@ -63,7 +63,9 @@ async function creerDepense(req, res) {
       montant,
       description: description || null,
       utilisateurId: req.user.id,
-      dateDepense: dateDepense ? new Date(dateDepense) : new Date(),
+      // Un non-admin ne voit que ses dépenses du jour : on impose donc la date du jour,
+      // sinon une dépense antidatée ou postdatée disparaîtrait aussitôt de son écran.
+      dateDepense: req.user.role === 'ADMIN' && dateDepense ? new Date(dateDepense) : new Date(),
       lieuId: lieuId ? Number(lieuId) : null,
     },
     include: { categorie: true, sousCategorie: true, lieu: true },
@@ -249,7 +251,8 @@ async function modifierDepense(req, res) {
       sousCategorieId: sousCategorieId !== undefined ? (sousCategorieId ? Number(sousCategorieId) : null) : undefined,
       montant: montant !== undefined ? montant : undefined,
       description: description !== undefined ? (description || null) : undefined,
-      dateDepense: dateDepense !== undefined ? new Date(dateDepense) : undefined,
+      // Seul un admin peut changer la date (même raison qu'à la création).
+      dateDepense: req.user.role === 'ADMIN' && dateDepense !== undefined ? new Date(dateDepense) : undefined,
     },
     include: { categorie: true, sousCategorie: true, lieu: true },
   });
