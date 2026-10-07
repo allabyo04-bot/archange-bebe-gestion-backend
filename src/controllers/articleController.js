@@ -318,7 +318,15 @@ async function uploaderPhoto(req, res) {
         url: resultat.secure_url,
         ordre: nombrePhotosExistantes,
         estPrincipale: estPremierePhoto,
+        ajouteParId: req.user.id,
       },
+    });
+    // Tracé dans le journal (reste visible au rapport d'activité même si la photo est
+    // supprimée plus tard).
+    await enregistrerActivite(prisma, {
+      type: 'AJOUT_PHOTO_ARTICLE',
+      description: `Photo ajoutée sur ${article.designation} (${article.reference})${estPremierePhoto ? ' — photo principale' : ''}`,
+      utilisateurId: req.user.id,
     });
 
     // Article.photoUrl reste synchronisé sur la photo principale (compatibilité

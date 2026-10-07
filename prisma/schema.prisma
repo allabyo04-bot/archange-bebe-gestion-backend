@@ -84,6 +84,7 @@ model Utilisateur {
   receptions        Reception[]
   inventairesSoumis InventaireEnAttente[] @relation("AuteurInventaire")
   inventairesTraites InventaireEnAttente[] @relation("ValidateurInventaire")
+  photosAjoutees    PhotoArticle[] @relation("AjouteurPhoto")
 }
 model JournalActivite {
   id            Int         @id @default(autoincrement())
@@ -196,6 +197,10 @@ model PhotoArticle {
   ordre         Int      @default(0)
   estPrincipale Boolean  @default(false)
   createdAt     DateTime @default(now())
+  // Qui a ajouté la photo (null pour les photos antérieures à ce champ). Sert à autoriser
+  // un non-admin à supprimer uniquement les photos qu'il a lui-même ajoutées.
+  ajouteParId   Int?
+  ajoutePar     Utilisateur? @relation("AjouteurPhoto", fields: [ajouteParId], references: [id])
 
   @@index([articleId])
 }

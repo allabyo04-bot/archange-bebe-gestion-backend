@@ -25,7 +25,7 @@ async function rapportActivite(req, res) {
   }
   const whereDate = Object.keys(periode).length > 0 ? periode : undefined;
 
-  const [articlesCrees, modificationsPrix, receptions, corrections, transferts, famillesCreees, inventairesSoumis] = await Promise.all([
+  const [articlesCrees, modificationsPrix, receptions, corrections, transferts, famillesCreees, inventairesSoumis, photosAjoutees] = await Promise.all([
     prisma.article.findMany({
       where: { creeParId: utilisateurId, ...(whereDate ? { createdAt: whereDate } : {}) },
       select: {
@@ -66,6 +66,11 @@ async function rapportActivite(req, res) {
       include: { lieu: { select: { nom: true } }, traitePar: { select: { nomComplet: true } }, lignes: true },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.journalActivite.findMany({
+      where: { utilisateurId, type: 'AJOUT_PHOTO_ARTICLE', ...(whereDate ? { createdAt: whereDate } : {}) },
+      select: { description: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    }),
   ]);
 
   res.json({
@@ -83,12 +88,14 @@ async function rapportActivite(req, res) {
       nbSousFamillesCreees: famillesCreees.filter((f) => f.type === 'CREATION_SOUS_FAMILLE').length,
       nbInventairesSoumis: inventairesSoumis.length,
       nbInventairesEnAttente: inventairesSoumis.filter((i) => i.statut === 'EN_ATTENTE').length,
+      nbPhotosAjoutees: photosAjoutees.length,
     },
     detail: {
       articlesCrees: articlesCrees.map((a) => ({
         ...a, famille: a.famille?.nom || null, sousFamille: a.sousFamille?.nom || null,
       })),
       famillesCreees: famillesCreees.map((f) => ({ date: f.createdAt, description: f.description })),
+      photosAjoutees: photosAjoutees.map((p) => ({ date: p.createdAt, description: p.description })),
       inventairesSoumis: inventairesSoumis.map((i) => ({
         id: i.id, date: i.createdAt, lieu: i.lieu?.nom, nbLignes: i.lignes.length,
         statut: i.statut, traitePar: i.traitePar?.nomComplet || null, traiteLe: i.traiteLe, motifRejet: i.motifRejet,

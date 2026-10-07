@@ -23,6 +23,21 @@ async function requireAdminOuCreateur(req, res, next) {
   }
   next();
 }
+
+// Suppression d'une photo : admin, créateur de l'article, ou la personne qui a elle-même
+// ajouté cette photo. Un non-admin ne peut donc pas effacer les photos des autres.
+async function requireDroitSuppressionPhoto(req, res, next) {
+  if (req.user?.role === 'ADMIN') return next();
+  const photo = await prisma.photoArticle.findUnique({
+    where: { id: Number(req.params.photoId) },
+    select: { ajouteParId: true, article: { select: { creeParId: true } } },
+  });
+  if (!photo) return res.status(404).json({ error: 'Photo introuvable.' });
+  if (photo.ajouteParId !== req.user.id && photo.article?.creeParId !== req.user.id) {
+    return res.status(403).json({ error: "Vous ne pouvez supprimer que les photos que vous avez ajoutées." });
+  }
+  next();
+}
 const upload = require('../middleware/upload');
 
 router.get('/', requireAuth, listerArticles);
@@ -35,8 +50,10 @@ router.put('/deplacer-groupe', requireAuth, requireRole('ADMIN'), deplacerGroupe
 router.put('/:id', requireAuth, requireRole('ADMIN'), modifierArticle);
 router.get('/:id/stock', requireAuth, stockParDepot);
 router.post('/:id/generer-code-barre', requireAuth, requireModule('ARTICLES'), requireAdminOuCreateur, genererCodeBarre);
-router.post('/:id/photo', requireAuth, requireModule('ARTICLES'), requireAdminOuCreateur, upload.single('photo'), uploaderPhoto);
-router.delete('/:id/photos/:photoId', requireAuth, requireModule('ARTICLES'), requireAdminOuCreateur, supprimerPhoto);
+// Ajouter une photo : ouvert à tout compte ayant le module Articles, sur n'importe quel article
+// (compléter le catalogue). Changer la photo principale reste admin ou créateur de l'article.
+router.post('/:id/photo', requireAuth, requireModule('ARTICLES'), upload.single('photo'), uploaderPhoto);
+router.delete('/:id/photos/:photoId', requireAuth, requireModule('ARTICLES'), requireDroitSuppressionPhoto, supprimerPhoto);
 router.put('/:id/photos/:photoId/principale', requireAuth, requireModule('ARTICLES'), requireAdminOuCreateur, definirPhotoPrincipale);
 
 module.exports = router;
