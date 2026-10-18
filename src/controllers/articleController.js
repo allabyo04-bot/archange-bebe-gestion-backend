@@ -117,48 +117,95 @@ async function creerArticle(req, res) {
 // PUT /api/articles/:id
 async function modifierArticle(req, res) {
   const id = Number(req.params.id);
+  const estAdmin = req.user.role === 'ADMIN';
   const {
     designation, familleId, sousFamilleId,
     prixAchat, prixVente, prixPromo, seuilAlerte, actif, description,
   } = req.body;
 
-  const article = await prisma.article.findUnique({ where: { id } });
+  const article = await prisma.article.findUnique({ where: { id }, include: { famille: true, sousFamille: true } });
   if (!article) return res.status(404).json({ error: 'Article introuvable.' });
 
   if (!designation || !familleId || !sousFamilleId || prixVente === undefined) {
     return res.status(400).json({ error: 'Désignation, famille, sous-famille et prix de vente sont requis.' });
   }
+  if (!(Number(prixVente) >= 0)) {
+    return res.status(400).json({ error: 'Le prix de vente doit être un nombre positif.' });
+  }
 
-  const nouveauPrixAchat = prixAchat !== undefined ? prixAchat : article.prixAchat;
+  const sousFamille = await prisma.sousFamille.findUnique({ where: { id: Number(sousFamilleId) } });
+  if (!sousFamille || sousFamille.familleId !== Number(familleId)) {
+    return res.status(400).json({ error: "Cette sous-famille n'appartient pas à la famille choisie." });
+  }
 
-  const misAJour = await prisma.article.update({
-    where: { id },
-    data: {
-      designation: designation.trim().toUpperCase(),
-      prixVente,
-      prixPromo: prixPromo !== undefined ? (prixPromo === '' || prixPromo === null ? null : prixPromo) : article.prixPromo,
-      seuilAlerte: seuilAlerte ?? article.seuilAlerte,
-      actif: actif !== undefined ? actif : article.actif,
-      description: description !== undefined ? (description.trim() === '' ? null : description.trim()) : article.description,
-    },
-  });
+  const data = {
+    designation: designation.trim().toUpperCase(),
+    familleId: Number(familleId),
+    sousFamilleId: Number(sousFamilleId),
+    prixVente,
+    prixPromo: prixPromo !== undefined ? (prixPromo === '' || prixPromo === null ? null : prixPromo) : article.prixPromo,
+    seuilAlerte: seuilAlerte ?? article.seuilAlerte,
+    description: description !== undefined ? ((description ?? '').trim() === '' ? null : description.trim()) : article.description,
+  };
+  // Réservé aux administrateurs : prix d'achat (un non-admin ne le voit même pas) et
+  // activation/désactivation. Pour un non-admin, ces champs du corps de requête sont ignorés.
+  if (estAdmin) {
+    if (prixAchat !== undefined) data.prixAchat = prixAchat;
+    if (actif !== undefined) data.actif = actif;
+  }
 
-  const prixAchatAvant = Number(article.prixAchat);
-  const prixVenteAvant = Number(article.prixVente);
-  const prixAchatApres = Number(misAJour.prixAchat);
-  const prixVenteApres = Number(misAJour.prixVente);
+  const misAJour = await prisma.article.update({ where: { id }, data });
 
-  if (prixAchatAvant !== prixAchatApres || prixVenteAvant !== prixVenteApres) {
-    const parties = [];
-    if (prixAchatAvant !== prixAchatApres) {
-      parties.push(`prix d'achat ${prixAchatAvant.toLocaleString('fr-FR')} F → ${prixAchatApres.toLocaleString('fr-FR')} F`);
-    }
-    if (prixVenteAvant !== prixVenteApres) {
-      parties.push(`prix de vente ${prixVenteAvant.toLocaleString('fr-FR')} F → ${prixVenteApres.toLocaleString('fr-FR')} F`);
-    }
+  // ---- Traçabilité : ancien → nouveau, séparé « prix » / « autres informations » ----
+  const fmt = (n) => `${Number(n).toLocaleString('fr-FR')} F`;
+  const fmtOuTiret = (v) => (v === null || v === undefined ? '—' : fmt(v));
+  const differe = (a, b) => Number(a) !== Number(b);
+
+  const partiesPrix = [];
+  if (estAdmin && differe(article.prixAchat, misAJour.prixAchat)) {
+    partiesPrix.push(`prix d'achat ${fmt(article.prixAchat)} → ${fmt(misAJour.prixAchat)}`);
+  }
+  if (differe(article.prixVente, misAJour.prixVente)) {
+    partiesPrix.push(`prix de vente ${fmt(article.prixVente)} → ${fmt(misAJour.prixVente)}`);
+  }
+  const ancienPromo = article.prixPromo === null ? null : Number(article.prixPromo);
+  const nouveauPromo = misAJour.prixPromo === null ? null : Number(misAJour.prixPromo);
+  if (ancienPromo !== nouveauPromo) {
+    partiesPrix.push(`prix promo ${fmtOuTiret(ancienPromo)} → ${fmtOuTiret(nouveauPromo)}`);
+  }
+
+  const partiesAutres = [];
+  if (article.designation !== misAJour.designation) {
+    partiesAutres.push(`désignation « ${article.designation} » → « ${misAJour.designation} »`);
+  }
+  if (article.familleId !== misAJour.familleId || article.sousFamilleId !== misAJour.sousFamilleId) {
+    const nouvelleFamille = await prisma.famille.findUnique({ where: { id: misAJour.familleId } });
+    partiesAutres.push(
+      `rangement ${article.famille?.nom || '—'} / ${article.sousFamille?.nom || '—'} → ${nouvelleFamille?.nom || '—'} / ${sousFamille.nom}`,
+    );
+  }
+  if (article.seuilAlerte !== misAJour.seuilAlerte) {
+    partiesAutres.push(`seuil d'alerte ${article.seuilAlerte} → ${misAJour.seuilAlerte}`);
+  }
+  if ((article.description || '') !== (misAJour.description || '')) {
+    partiesAutres.push('description modifiée');
+  }
+  if (estAdmin && article.actif !== misAJour.actif) {
+    partiesAutres.push(misAJour.actif ? 'article réactivé' : 'article désactivé');
+  }
+
+  const libelle = `${article.designation} (${article.reference})`;
+  if (partiesPrix.length > 0) {
     await enregistrerActivite(prisma, {
       type: 'MODIFICATION_PRIX_ARTICLE',
-      description: `${article.designation} (${article.reference}) — ${parties.join(', ')}`,
+      description: `${libelle} — ${partiesPrix.join(', ')}`,
+      utilisateurId: req.user.id,
+    });
+  }
+  if (partiesAutres.length > 0) {
+    await enregistrerActivite(prisma, {
+      type: 'MODIFICATION_ARTICLE',
+      description: `${libelle} — ${partiesAutres.join(', ')}`,
       utilisateurId: req.user.id,
     });
   }

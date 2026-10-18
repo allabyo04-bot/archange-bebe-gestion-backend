@@ -73,12 +73,19 @@ async function rapportActivite(req, res) {
     }),
   ]);
 
+  const fichesModifiees = await prisma.journalActivite.findMany({
+    where: { utilisateurId, type: 'MODIFICATION_ARTICLE', ...(whereDate ? { createdAt: whereDate } : {}) },
+    select: { description: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  });
+
   res.json({
     utilisateur: { id: utilisateur.id, nomComplet: utilisateur.nomComplet, nomUtilisateur: utilisateur.nomUtilisateur },
     periode: { dateDebut: dateDebut || null, dateFin: dateFin || null },
     resume: {
       nbArticlesCrees: articlesCrees.length,
       nbPrixModifies: modificationsPrix.length,
+      nbFichesModifiees: fichesModifiees.length,
       nbReceptions: receptions.length,
       nbLignesReceptionnees: receptions.reduce((s, r) => s + r.lignes.length, 0),
       quantiteTotaleReceptionnee: receptions.reduce((s, r) => s + r.lignes.reduce((s2, l) => s2 + l.quantite, 0), 0),
@@ -101,6 +108,7 @@ async function rapportActivite(req, res) {
         statut: i.statut, traitePar: i.traitePar?.nomComplet || null, traiteLe: i.traiteLe, motifRejet: i.motifRejet,
       })),
       modificationsPrix,
+      fichesModifiees,
       receptions: receptions.map((r) => ({
         id: r.id, date: r.createdAt, lieu: r.lieu?.nom, fournisseur: r.fournisseur,
         nbLignes: r.lignes.length, quantiteTotale: r.lignes.reduce((s, l) => s + l.quantite, 0),

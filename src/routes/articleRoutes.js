@@ -8,10 +8,12 @@ const {
 const { requireAuth, requireRole, requireModule, requireUnDesModules } = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 
-// Un compte avec le module ARTICLES (ex. gestionnaire de stock) peut CRÉER des articles,
-// mais ne modifie pas l'existant. Exception : il peut compléter les articles qu'il a
-// lui-même créés (photos, code-barre généré), sinon il ne pourrait pas finir sa fiche.
-// Les admins passent toujours.
+// Un compte avec le module ARTICLES (ex. gestionnaire de stock) peut créer des articles ET
+// modifier la fiche d'un article existant (désignation, description, famille, seuil, prix
+// de vente/promo), chaque changement étant tracé au journal. Le prix d'achat et
+// l'activation/désactivation restent réservés aux admins (vérifié dans modifierArticle).
+// Le code-barre généré et le choix de la photo principale restent réservés aux admins et
+// au créateur de l'article. Les admins passent toujours.
 async function requireAdminOuCreateur(req, res, next) {
   if (req.user?.role === 'ADMIN') return next();
   const article = await prisma.article.findUnique({
@@ -47,7 +49,7 @@ router.get('/a-imprimer', requireAuth, requireUnDesModules('ARTICLES', 'STOCK'),
 router.post('/a-imprimer/etiquettes', requireAuth, requireUnDesModules('ARTICLES', 'STOCK'), imprimerEtiquettes);
 router.post('/', requireAuth, requireModule('ARTICLES'), creerArticle);
 router.put('/deplacer-groupe', requireAuth, requireRole('ADMIN'), deplacerGroupe);
-router.put('/:id', requireAuth, requireRole('ADMIN'), modifierArticle);
+router.put('/:id', requireAuth, requireModule('ARTICLES'), modifierArticle);
 router.get('/:id/stock', requireAuth, stockParDepot);
 router.post('/:id/generer-code-barre', requireAuth, requireModule('ARTICLES'), requireAdminOuCreateur, genererCodeBarre);
 // Ajouter une photo : ouvert à tout compte ayant le module Articles, sur n'importe quel article
