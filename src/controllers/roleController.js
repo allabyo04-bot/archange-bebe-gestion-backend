@@ -1,6 +1,6 @@
 const prisma = require('../lib/prisma');
 
-const MODULES = ['VENTES', 'STOCK', 'ARTICLES', 'DEPENSES', 'RAPPORTS', 'UTILISATEURS'];
+const MODULES = ['VENTES', 'STOCK', 'ARTICLES', 'DEPENSES', 'RAPPORTS', 'UTILISATEURS', 'VENTE_GROS'];
 
 // GET /api/roles
 async function listerRoles(req, res) {

@@ -3,7 +3,7 @@ const router = express.Router();
 const {
   listerArticles, rechercherArticle, creerArticle, modifierArticle, genererCodeBarre,
   listerCodesAImprimer, imprimerEtiquettes, uploaderPhoto, supprimerPhoto, definirPhotoPrincipale,
-  deplacerGroupe, stockParDepot,
+  deplacerGroupe, stockParDepot, calculerPrixGros,
 } = require('../controllers/articleController');
 const { requireAuth, requireRole, requireModule, requireUnDesModules } = require('../middleware/auth');
 const prisma = require('../lib/prisma');
@@ -49,6 +49,7 @@ router.get('/a-imprimer', requireAuth, requireUnDesModules('ARTICLES', 'STOCK'),
 router.post('/a-imprimer/etiquettes', requireAuth, requireUnDesModules('ARTICLES', 'STOCK'), imprimerEtiquettes);
 router.post('/', requireAuth, requireModule('ARTICLES'), creerArticle);
 router.put('/deplacer-groupe', requireAuth, requireRole('ADMIN'), deplacerGroupe);
+router.post('/prix-gros/calculer', requireAuth, requireRole('ADMIN'), calculerPrixGros);
 router.put('/:id', requireAuth, requireModule('ARTICLES'), modifierArticle);
 router.get('/:id/stock', requireAuth, stockParDepot);
 router.post('/:id/generer-code-barre', requireAuth, requireModule('ARTICLES'), requireAdminOuCreateur, genererCodeBarre);

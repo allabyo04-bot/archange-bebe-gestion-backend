@@ -67,16 +67,31 @@ async function rechercherArticle(req, res) {
   res.json({ mode: 'recherche', resultats: resultatsAvecStock });
 }
 
+// Le prix de gros est facultatif (null = pas de prix de gros). S'il existe, il doit être
+// strictement positif et STRICTEMENT inférieur au prix de vente.
+function validerPrixGros(prixGros, prixVente) {
+  if (prixGros === null || prixGros === undefined) return null;
+  if (!(Number(prixGros) > 0)) return 'Le prix de gros doit être un nombre positif.';
+  if (Number(prixGros) >= Number(prixVente)) {
+    const fmt = (n) => `${Number(n).toLocaleString('fr-FR')} F`;
+    return `Le prix de gros (${fmt(prixGros)}) doit être inférieur au prix de vente (${fmt(prixVente)}).`;
+  }
+  return null;
+}
+
 // POST /api/articles
 async function creerArticle(req, res) {
   const {
     codeBarre, codeInterne, designation,
-    familleId, sousFamilleId, prixAchat, prixVente, seuilAlerte, description,
+    familleId, sousFamilleId, prixAchat, prixVente, prixGros, seuilAlerte, description,
   } = req.body;
 
   if (!designation || !familleId || !sousFamilleId || prixVente === undefined) {
     return res.status(400).json({ error: 'Désignation, famille, sous-famille et prix de vente sont requis.' });
   }
+  const prixGrosSaisi = prixGros === '' || prixGros === undefined ? null : prixGros;
+  const erreurGros = validerPrixGros(prixGrosSaisi, prixVente);
+  if (erreurGros) return res.status(400).json({ error: erreurGros });
 
   try {
     const article = await prisma.$transaction(async (tx) => {
@@ -101,6 +116,7 @@ async function creerArticle(req, res) {
           sousFamilleId: Number(sousFamilleId),
           prixAchat: prixAchat || 0,
           prixVente,
+          prixGros: prixGrosSaisi,
           seuilAlerte: seuilAlerte ?? 5,
           description: description && description.trim() ? description.trim() : null,
           creeParId: req.user.id,
@@ -120,7 +136,7 @@ async function modifierArticle(req, res) {
   const estAdmin = req.user.role === 'ADMIN';
   const {
     designation, familleId, sousFamilleId,
-    prixAchat, prixVente, prixPromo, seuilAlerte, actif, description,
+    prixAchat, prixVente, prixGros, prixPromo, seuilAlerte, actif, description,
   } = req.body;
 
   const article = await prisma.article.findUnique({ where: { id }, include: { famille: true, sousFamille: true } });
@@ -147,6 +163,12 @@ async function modifierArticle(req, res) {
     seuilAlerte: seuilAlerte ?? article.seuilAlerte,
     description: description !== undefined ? ((description ?? '').trim() === '' ? null : description.trim()) : article.description,
   };
+  // Prix de gros : absent du corps = inchangé ; vide ou null = supprimé.
+  const nouveauPrixGros = prixGros === undefined ? article.prixGros : (prixGros === '' || prixGros === null ? null : prixGros);
+  const erreurGros = validerPrixGros(nouveauPrixGros, prixVente);
+  if (erreurGros) return res.status(400).json({ error: erreurGros });
+  data.prixGros = nouveauPrixGros;
+
   // Réservé aux administrateurs : prix d'achat (un non-admin ne le voit même pas) et
   // activation/désactivation. Pour un non-admin, ces champs du corps de requête sont ignorés.
   if (estAdmin) {
@@ -167,6 +189,11 @@ async function modifierArticle(req, res) {
   }
   if (differe(article.prixVente, misAJour.prixVente)) {
     partiesPrix.push(`prix de vente ${fmt(article.prixVente)} → ${fmt(misAJour.prixVente)}`);
+  }
+  const ancienGros = article.prixGros === null ? null : Number(article.prixGros);
+  const nouveauGros = misAJour.prixGros === null ? null : Number(misAJour.prixGros);
+  if (ancienGros !== nouveauGros) {
+    partiesPrix.push(`prix de gros ${fmtOuTiret(ancienGros)} → ${fmtOuTiret(nouveauGros)}`);
   }
   const ancienPromo = article.prixPromo === null ? null : Number(article.prixPromo);
   const nouveauPromo = misAJour.prixPromo === null ? null : Number(misAJour.prixPromo);
@@ -484,6 +511,76 @@ async function stockParDepot(req, res) {
   res.json(stocks.map((s) => ({ lieuId: s.lieuId, lieuNom: s.lieu.nom, quantite: s.quantite })));
 }
 
+// POST /api/articles/prix-gros/calculer   (ADMIN uniquement : il faut voir les prix d'achat)
+// body: { pourcentage, arrondi, portee, appliquer }
+// Calcule le prix de gros de chaque article actif : prix d'achat + pourcentage, arrondi au
+// multiple demandé. Un article est IGNORÉ (et compté à part) si :
+//   - il n'a pas de prix d'achat renseigné (impossible à calculer) ;
+//   - le prix calculé n'est pas strictement inférieur à son prix de vente (le gros doit
+//     toujours rester sous le prix normal) ;
+//   - (portée « sans_prix_gros ») il a déjà un prix de gros, qu'on ne touche pas.
+// Sans appliquer = true, rien n'est écrit : c'est un aperçu. Avec appliquer = true, tout est
+// écrit en une seule transaction (tout ou rien) et une ligne est ajoutée au journal.
+async function calculerPrixGros(req, res) {
+  const { pourcentage, arrondi = 50, portee = 'sans_prix_gros', appliquer = false } = req.body;
+  const p = Number(pourcentage);
+  const pas = Number(arrondi);
+  if (!(p > 0) || p > 500) {
+    return res.status(400).json({ error: 'Le pourcentage doit être compris entre 0 (exclu) et 500.' });
+  }
+  if (![1, 5, 10, 25, 50, 100].includes(pas)) {
+    return res.status(400).json({ error: "L'arrondi doit être 1, 5, 10, 25, 50 ou 100 F." });
+  }
+  if (!['sans_prix_gros', 'tous'].includes(portee)) {
+    return res.status(400).json({ error: 'Portée invalide.' });
+  }
+
+  const articles = await prisma.article.findMany({
+    where: { actif: true },
+    select: { id: true, reference: true, designation: true, prixAchat: true, prixVente: true, prixGros: true },
+    orderBy: { designation: 'asc' },
+  });
+
+  const aMettreAJour = [];
+  const resume = { examines: articles.length, dejaRenseignes: 0, sansPrixAchat: 0, nonInferieurs: 0, inchanges: 0 };
+
+  for (const a of articles) {
+    if (portee === 'sans_prix_gros' && a.prixGros !== null) { resume.dejaRenseignes += 1; continue; }
+    const achat = Number(a.prixAchat);
+    const vente = Number(a.prixVente);
+    if (!(achat > 0)) { resume.sansPrixAchat += 1; continue; }
+    const nouveau = Math.round((achat * (1 + p / 100)) / pas) * pas;
+    if (!(nouveau > 0) || nouveau >= vente) { resume.nonInferieurs += 1; continue; }
+    if (a.prixGros !== null && Number(a.prixGros) === nouveau) { resume.inchanges += 1; continue; }
+    aMettreAJour.push({
+      id: a.id,
+      reference: a.reference,
+      designation: a.designation,
+      prixVente: vente,
+      ancien: a.prixGros === null ? null : Number(a.prixGros),
+      nouveau,
+    });
+  }
+
+  if (appliquer && aMettreAJour.length > 0) {
+    await prisma.$transaction(
+      aMettreAJour.map((l) => prisma.article.update({ where: { id: l.id }, data: { prixGros: l.nouveau } })),
+    );
+    await enregistrerActivite(prisma, {
+      type: 'CALCUL_PRIX_GROS',
+      description: `Prix de gros calculés : prix d'achat + ${p} %, arrondi à ${pas} F (${portee === 'tous' ? 'tous les articles' : 'articles sans prix de gros'}) — ${aMettreAJour.length} article(s) mis à jour.`,
+      utilisateurId: req.user.id,
+    });
+  }
+
+  res.json({
+    appliques: appliquer ? aMettreAJour.length : 0,
+    aMettreAJour: aMettreAJour.length,
+    resume,
+    exemples: aMettreAJour.slice(0, 15),
+  });
+}
+
 module.exports = {
   listerArticles,
   rechercherArticle,
@@ -497,4 +594,5 @@ module.exports = {
   definirPhotoPrincipale,
   deplacerGroupe,
   stockParDepot,
+  calculerPrixGros,
 };

@@ -27,6 +27,8 @@ enum ModulePermission {
   DEPENSES
   RAPPORTS
   UTILISATEURS
+  // Droit de vendre au prix de gros (case « Vente en gros » de l'écran Rôles).
+  VENTE_GROS
 }
 
 model Role {
@@ -145,6 +147,9 @@ model Article {
   sousFamille     SousFamille? @relation(fields: [sousFamilleId], references: [id])
   prixAchat       Decimal      @default(0)
   prixVente       Decimal
+  // Prix de gros : facultatif, toujours inférieur au prix de vente (vérifié côté serveur).
+  // Visible seulement des admins, des comptes « Vente en gros » et du module Articles.
+  prixGros        Decimal?
   // Prix barré pour le site e-commerce uniquement — n'affecte jamais le prix
   // pratiqué en caisse (Ventes utilise toujours prixVente).
   prixPromo       Decimal?

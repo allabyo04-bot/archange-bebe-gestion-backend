@@ -37,9 +37,11 @@ async function login(req, res) {
       .map((p) => p.module);
   } else {
     permissions = utilisateur.role === 'ADMIN'
-      ? ['VENTES', 'STOCK', 'ARTICLES', 'DEPENSES', 'RAPPORTS', 'UTILISATEURS']
+      ? ['VENTES', 'STOCK', 'ARTICLES', 'DEPENSES', 'RAPPORTS', 'UTILISATEURS', 'VENTE_GROS']
       : ['VENTES', 'DEPENSES'];
   }
+  // Le rôle Administrateur n'a pas de ligne VENTE_GROS en base : on l'ajoute ici.
+  if (utilisateur.role === 'ADMIN' && !permissions.includes('VENTE_GROS')) permissions.push('VENTE_GROS');
 
   const token = jwt.sign(
     {
