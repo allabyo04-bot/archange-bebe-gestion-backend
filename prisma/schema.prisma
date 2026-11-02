@@ -415,6 +415,13 @@ enum StatutVente {
   ANNULEE
 }
 
+// Tarif appliqué à une vente : prix de vente habituel ou prix de gros (réservé aux comptes
+// ayant le droit « Vente en gros »).
+enum TarifVente {
+  DETAIL
+  GROS
+}
+
 enum TypeVente {
   COMPTANT
   CREDIT
@@ -423,6 +430,7 @@ enum TypeVente {
 model Vente {
   id             Int          @id @default(autoincrement())
   numero         String       @unique
+  tarif          TarifVente   @default(DETAIL)
   clientId       Int?
   client         Client?      @relation(fields: [clientId], references: [id])
   utilisateurId  Int

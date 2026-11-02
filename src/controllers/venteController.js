@@ -24,6 +24,26 @@ async function obtenirPlafondRemisePourcent(reqUser) {
   return Number(utilisateur.roleDynamique.plafondRemisePourcent);
 }
 
+// Droit « Vente en gros » : un administrateur l'a toujours ; sinon il faut que le rôle de
+// l'utilisateur ait la case cochée. On relit la base (et non le jeton de connexion, valable
+// 7 jours) pour que le retrait du droit prenne effet tout de suite.
+async function peutVendreEnGros(reqUser) {
+  if (reqUser.role === 'ADMIN') return true;
+  const utilisateur = await prisma.utilisateur.findUnique({
+    where: { id: reqUser.id },
+    include: { roleDynamique: { include: { permissions: true } } },
+  });
+  return !!utilisateur?.roleDynamique?.permissions.some((p) => p.module === 'VENTE_GROS' && p.actif);
+}
+
+// Prix d'une ligne selon le tarif. Le prix est TOUJOURS décidé ici, à partir de la fiche
+// article : en gros, prix de gros s'il existe, sinon prix de vente normal (jamais un prix
+// envoyé par l'écran, qu'une requête modifiée pourrait fausser).
+function prixSelonTarif(article, enGros) {
+  if (enGros && article.prixGros !== null && article.prixGros !== undefined) return Number(article.prixGros);
+  return Number(article.prixVente);
+}
+
 // Vérifie un PIN contre tous les comptes ADMIN actifs (peu nombreux). Retourne le
 // compte correspondant, ou null si aucun ne correspond.
 async function verifierPinAdmin(pin) {
@@ -70,13 +90,14 @@ async function mettreAJourFidelite(tx, clientId, totalNet) {
 async function creerVente(req, res) {
   const {
     clientId, vendeurId, lieuId, remisePourcent, motifRemise, remisePin,
-    carteCadeauCode, avoirCode, typeVente, lignes, paiements,
+    carteCadeauCode, avoirCode, typeVente, tarif, lignes: lignesEnvoyees, paiements,
   } = req.body;
   const utilisateurId = req.user.id;
+  const enGros = tarif === 'GROS';
 
   const type = typeVente === 'CREDIT' ? 'CREDIT' : 'COMPTANT';
 
-  if (!lieuId || !Array.isArray(lignes) || lignes.length === 0) {
+  if (!lieuId || !Array.isArray(lignesEnvoyees) || lignesEnvoyees.length === 0) {
     return res.status(400).json({ error: 'Lieu de vente et au moins une ligne sont requis.' });
   }
   if (!vendeurId) {
@@ -111,6 +132,47 @@ async function creerVente(req, res) {
       return res.status(400).json({ error: 'Chaque paiement doit avoir un mode et un montant positif.' });
     }
   }
+
+  // ---- Tarif de gros ----
+  // Vente en gros : réservée aux comptes autorisés, et les prix sont imposés par le serveur.
+  // Vente normale : si un prix envoyé est exactement le prix de gros d'un article (sous son
+  // prix de vente), il faut avoir le droit de vendre en gros — sinon le prix de gros serait
+  // contournable en l'envoyant dans une vente normale.
+  const articlesVendus = await prisma.article.findMany({
+    where: { id: { in: lignesEnvoyees.map((l) => Number(l.articleId)) } },
+    select: { id: true, designation: true, prixVente: true, prixGros: true },
+  });
+  const articleParId = Object.fromEntries(articlesVendus.map((a) => [a.id, a]));
+  for (const l of lignesEnvoyees) {
+    if (!articleParId[Number(l.articleId)]) {
+      return res.status(400).json({ error: `Article introuvable (id ${l.articleId}).` });
+    }
+  }
+
+  let droitGros = null; // calculé une seule fois, seulement si besoin
+  const verifierDroitGros = async () => {
+    if (droitGros === null) droitGros = await peutVendreEnGros(req.user);
+    return droitGros;
+  };
+
+  if (enGros && !(await verifierDroitGros())) {
+    return res.status(403).json({ error: "Vous n'avez pas le droit de vendre en gros." });
+  }
+
+  if (!enGros) {
+    for (const l of lignesEnvoyees) {
+      const a = articleParId[Number(l.articleId)];
+      const estPrixGros = a.prixGros !== null && Number(a.prixGros) < Number(a.prixVente)
+        && Number(l.prixUnitaire) === Number(a.prixGros);
+      if (estPrixGros && !(await verifierDroitGros())) {
+        return res.status(403).json({ error: `Le prix de gros de « ${a.designation} » est réservé aux ventes en gros.` });
+      }
+    }
+  }
+
+  const lignes = enGros
+    ? lignesEnvoyees.map((l) => ({ ...l, prixUnitaire: prixSelonTarif(articleParId[Number(l.articleId)], true) }))
+    : lignesEnvoyees;
 
   // La remise est saisie en % côté caisse ; le montant en F est toujours recalculé
   // ici (jamais fait confiance à un montant envoyé par le client) pour empêcher un
@@ -187,6 +249,7 @@ async function creerVente(req, res) {
       const vente = await tx.vente.create({
         data: {
           numero: genererNumeroVente(),
+          tarif: enGros ? 'GROS' : 'DETAIL',
           clientId: clientIdFinal,
           vendeurId: vendeurId ? Number(vendeurId) : null,
           lieuId: Number(lieuId),
